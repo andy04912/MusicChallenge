@@ -1,0 +1,20 @@
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY index.html vite.config.js ./
+COPY src ./src
+COPY public ./public
+COPY artwork ./artwork
+COPY scripts/prepare-assets.mjs ./scripts/prepare-assets.mjs
+RUN npm run build
+
+FROM nginx:1.28-alpine AS runtime
+ENV PORT=8080 API_UPSTREAM=http://backend:8080 \
+    NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 \
+    NGINX_ENVSUBST_FILTER="^(PORT|API_UPSTREAM|NGINX_LOCAL_RESOLVERS)$"
+COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/healthz" || exit 1
+CMD ["nginx", "-g", "daemon off;"]

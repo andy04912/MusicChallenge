@@ -27,6 +27,6 @@ for artist, category in ARTISTS:
     print(f'{artist}: {len(selected)} songs')
 if len(songs) < 20:
     raise RuntimeError('Insufficient catalog results; preserve previous catalog.')
-dest = Path(__file__).resolve().parents[1] / 'dist' / 'catalog.json'
+dest = Path(__file__).resolve().parents[1] / 'seeds' / 'catalog.json'
 dest.write_text(json.dumps(songs, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f'Saved {len(songs)} metadata records, no media downloaded.')

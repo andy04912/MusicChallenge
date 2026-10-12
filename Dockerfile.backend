@@ -1,0 +1,11 @@
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 DATA_DIR=/data SERVE_STATIC=false
+# The API uses only Node built-ins; no frontend bundle or npm dependencies.
+COPY package.json server.mjs charts.mjs ./
+COPY seeds ./seeds
+RUN mkdir -p /data && chown node:node /data
+USER node
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "server.mjs"]

@@ -1,0 +1,39 @@
+name: seoul-signal
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8090}:8080"
+    environment:
+      PORT: "8080"
+      API_UPSTREAM: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (at least 16 characters)}
+      APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:${FRONTEND_PORT:-8090}}
+      # Local HTTP only. Set APP_ENV=production behind HTTPS when deploying.
+      NODE_ENV: ${APP_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: "8080"
+      DATA_DIR: /data
+      SERVE_STATIC: "false"
+    expose:
+      - "8080"
+    volumes:
+      - songs-data:/data
+    init: true
+    restart: unless-stopped
+
+volumes:
+  songs-data:
