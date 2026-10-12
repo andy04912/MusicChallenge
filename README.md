@@ -1,4 +1,4 @@
-# Seoul Signal
+# Music Challenge
 
 可自行部署的繁體中文華語／K-POP 猜歌網站。React + Vite App Shell，Node.js 24 + SQLite，前後端分開建置，適用 Docker Compose 或 Zeabur 兩個服務部署。前台 `/`，管理後台 `/admin`。不需要 ChatGPT 帳號或 Sites。
 
@@ -62,13 +62,13 @@ docker build -f Dockerfile.backend -t seoul-signal-backend .
 | backend | `ZBPACK_DOCKERFILE_NAME=backend` | `ADMIN_PASSWORD`、`NODE_ENV=production`、`PORT=8080`、`DATA_DIR=/data`、`SERVE_STATIC=false`、`APP_ORIGIN=https://前端網域` |
 | frontend | `ZBPACK_DOCKERFILE_NAME=frontend` | `PORT=8080`、`API_UPSTREAM=http://後端內網主機:8080` |
 
-`ZBPACK_DOCKERFILE_NAME` 填 **frontend / backend 後綴**，不是完整檔名。`API_UPSTREAM` 使用 Zeabur 顯示的後端私有網路主機，**不加尾斜線或 `/api`**，不能填 localhost。後端啟動後，前端代理會解析這個私有主機。
+`ZBPACK_DOCKERFILE_NAME` 填 **frontend / backend 後綴**，不是完整檔名。`API_UPSTREAM` 使用後端私有網路的完整 DNS 名稱，**不加尾斜線或 `/api`**，不能填 localhost。Zeabur 上使用 `service-<serviceId>.environment-<environmentId>.zeabur.internal`；Nginx 的動態 resolver 不會補上系統 DNS search suffix，只填短主機名會造成 502。實際設定見 `DEPLOYMENT.md`。
 
 只替 frontend 綁定公開網域／HTTPS；backend 不需要公開網域。後端 `APP_ORIGIN` 填前端完整公開來源，不加路徑或尾斜線，否則後台登入會被拒絕。前端沒有 `VITE_API_URL` 或管理員密碼，所有瀏覽器 API 請求固定走同源 `/api`。
 
 在 backend 掛載持久 Volume 到 `/data`，確保 UID/GID `1000:1000`（node 使用者）可以寫入。SQLite 必須維持單一後端副本；前端不掛載資料 Volume。API 健康檢查 `/api/health`，前端健康檢查 `/healthz`。
 
-Zeabur 不直接執行本專案的 Compose YAML；請依上面的兩個服務設定部署。[Zeabur Dockerfile 官方文件](https://zeabur.com/docs/en-US/deploy/methods/dockerfile) · [Volume 文件](https://zeabur.com/docs/en-US/data-management/volumes)。本次未自動建立 Zeabur 服務。
+Zeabur 不直接執行本專案的 Compose YAML；請依上面的兩個服務設定部署。[Zeabur Dockerfile 官方文件](https://zeabur.com/docs/en-US/deploy/methods/dockerfile) · [Volume 文件](https://zeabur.com/docs/en-US/data-management/volumes)。目前部署紀錄見 `DEPLOYMENT.md`。
 
 ## App Shell 架構
 
