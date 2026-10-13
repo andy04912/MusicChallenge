@@ -9,7 +9,10 @@ import {
 import LeaderboardPage from "./LeaderboardPage.jsx";
 import { request } from "../lib/api.js";
 
-vi.mock("../lib/api.js", () => ({ request: vi.fn() }));
+vi.mock("../lib/api.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  request: vi.fn(),
+}));
 let height, resize;
 beforeEach(() => {
   height = 470;

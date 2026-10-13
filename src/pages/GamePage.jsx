@@ -11,7 +11,7 @@ import {
   QuestionIcon,
 } from "@phosphor-icons/react";
 import { filterPool, decadeLabels, songKey } from "../lib/game-logic.js";
-import { appleURL, request } from "../lib/api.js";
+import { appleURL, request, cachedResponse } from "../lib/api.js";
 import GuessInput from "../components/GuessInput.jsx";
 import PreviewPlayer from "../components/PreviewPlayer.jsx";
 import Turntable from "../components/Turntable.jsx";
@@ -57,9 +57,11 @@ function Choices({ label, options, value, onChange, disabled }) {
 }
 export default function GamePage() {
   const { setGameActive, showHelp } = useOutletContext() || {};
-  const [catalog, setCatalog] = useState([]),
+  const [catalog, setCatalog] = useState(
+      () => cachedResponse("/api/catalog") || [],
+    ),
     [nickname, setNickname] = useState(() => readPlayerName()),
-    [player, setPlayer] = useState(null);
+    [player, setPlayer] = useState(() => cachedResponse("/api/player") || null);
   const [region, setRegion] = useState("kr"),
     [category, setCategory] = useState("all"),
     [decade, setDecade] = useState("all"),
@@ -67,7 +69,12 @@ export default function GamePage() {
   const [setupStep, setSetupStep] = useState(0),
     [run, setRun] = useState(null),
     [historyPage, setHistoryPage] = useState(0);
-  const [loading, setLoading] = useState(true),
+  const [loading, setLoading] = useState(
+      () =>
+        !!storedRun() ||
+        !cachedResponse("/api/catalog") ||
+        !cachedResponse("/api/player"),
+    ),
     [pending, setPending] = useState(false),
     [error, setError] = useState("");
   const alive = useRef(false),
@@ -100,7 +107,11 @@ export default function GamePage() {
     rememberRun(next.status === "finished" ? null : next.id);
   }
   async function load(signal) {
-    setLoading(true);
+    setLoading(
+      !!storedRun() ||
+        !cachedResponse("/api/catalog") ||
+        !cachedResponse("/api/player"),
+    );
     setError("");
     try {
       const [songs, guest] = await Promise.all([

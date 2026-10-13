@@ -1,6 +1,7 @@
 /* Preserve the record-store identity. Radii: controls 6px, panels 10px.
    Layering: normal content 0, floating preview 10, native dialogs top layer. */
 :root {
+  --turntable-pink: #c6275d;
   color-scheme: light;
   --accent-ink: #fffefa;
   --soft-accent: #f9e3ec;
@@ -388,7 +389,7 @@ html[data-theme="dark"] .theme-toggle .moon-icon {
   aspect-ratio: 1;
   width: 100%;
   border-radius: 14px;
-  background: #c6275d;
+  background: var(--turntable-pink);
   color: #fffefa;
   padding: 0;
   display: grid;

@@ -18,7 +18,10 @@ export default function GuessInput({
     [active, setActive] = useState(-1),
     [page, setPage] = useState(0);
   const composing = useRef(false),
-    input = useRef(null);
+    input = useRef(null),
+    pointer = useRef(null),
+    restoringFocus = useRef(false),
+    handledClick = useRef(null);
   const suggestions = useMemo(() => searchSongs(songs, text), [songs, text]);
   const pageSize = 2;
   const expanded = !disabled && open && suggestions.length > 0;
@@ -31,12 +34,65 @@ export default function GuessInput({
     )
       input.current?.focus({ preventScroll: true });
   }, [disabled]);
+  function focusInput() {
+    restoringFocus.current = true;
+    input.current?.focus({ preventScroll: true });
+    restoringFocus.current = false;
+  }
   function choose(song) {
+    if (disabled) return;
     setText(song.title);
     setSelected(song);
     setOpen(false);
     setActive(-1);
-    input.current.focus({ preventScroll: true });
+    focusInput();
+  }
+  // Activate on pointer release: mobile browsers may blur before click, or omit
+  // the compatibility click after preventDefault. Keep the keyboard/layout stable.
+  function suggestionAction(action) {
+    return {
+      onPointerDown(event) {
+        if (event.button !== 0 || event.isPrimary === false) return;
+        pointer.current = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+        };
+        handledClick.current = null;
+        event.preventDefault();
+      },
+      onPointerUp(event) {
+        const press = pointer.current;
+        if (!press || press.id !== event.pointerId) return;
+        pointer.current = null;
+        handledClick.current = {
+          target: event.currentTarget,
+          until: Date.now() + 700,
+        };
+        event.preventDefault();
+        if (
+          !disabled &&
+          Math.hypot(event.clientX - press.x, event.clientY - press.y) <= 12
+        ) {
+          action();
+          focusInput();
+        }
+      },
+      onPointerCancel() {
+        pointer.current = null;
+        if (document.activeElement !== input.current) setOpen(false);
+      },
+      onClick(event) {
+        const handled = handledClick.current;
+        handledClick.current = null;
+        if (
+          handled?.target === event.currentTarget &&
+          Date.now() < handled.until
+        )
+          return;
+        if (!disabled) action();
+      },
+    };
   }
   function change(value) {
     setText(value);
@@ -112,9 +168,10 @@ export default function GuessInput({
           enterKeyHint="send"
           onKeyDown={keyDown}
           onFocus={() => {
-            if (!selected) setOpen(true);
+            if (!selected && !restoringFocus.current) setOpen(true);
           }}
           onBlur={(event) => {
+            if (pointer.current) return;
             if (!event.relatedTarget?.closest?.(".compact-guess")) {
               setOpen(false);
               setActive(-1);
@@ -147,19 +204,20 @@ export default function GuessInput({
             .map((song, local) => {
               const index = page * pageSize + local;
               return (
-                <div
+                <button
+                  type="button"
+                  tabIndex={-1}
                   key={song.id}
                   id={`suggestion-${index}`}
                   className="song-suggestion"
                   role="option"
                   aria-label={`${song.title} ${song.artist}`}
                   aria-selected={index === active}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onClick={() => choose(song)}
+                  {...suggestionAction(() => choose(song))}
                 >
                   <strong>{song.title}</strong>
                   <span>{song.artist}</span>
-                </div>
+                </button>
               );
             })}
         </div>
@@ -169,11 +227,10 @@ export default function GuessInput({
               type="button"
               aria-label="上一頁歌曲建議"
               disabled={page === 0}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
+              {...suggestionAction(() => {
                 setPage(page - 1);
                 setActive(-1);
-              }}
+              })}
             >
               <CaretLeftIcon />
             </button>
@@ -184,11 +241,10 @@ export default function GuessInput({
               type="button"
               aria-label="下一頁歌曲建議"
               disabled={page >= pages - 1}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
+              {...suggestionAction(() => {
                 setPage(page + 1);
                 setActive(-1);
-              }}
+              })}
             >
               <CaretRightIcon />
             </button>

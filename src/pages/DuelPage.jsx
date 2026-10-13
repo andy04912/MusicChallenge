@@ -15,7 +15,7 @@ import {
   WifiSlashIcon,
   QuestionIcon,
 } from "@phosphor-icons/react";
-import { appleURL, request } from "../lib/api.js";
+import { appleURL, request, cachedResponse } from "../lib/api.js";
 import { readPlayerName, savePlayerName } from "../lib/player-name.js";
 import { decadeLabels, filterPool } from "../lib/game-logic.js";
 import {
@@ -131,10 +131,17 @@ export default function DuelPage() {
   const code = pathCode || search.get("room") || "";
   const navigate = useNavigate();
   const [room, setRoom] = useState(null),
-    [catalog, setCatalog] = useState([]);
+    [catalog, setCatalog] = useState(
+      () => cachedResponse("/api/catalog") || [],
+    );
   const [nickname, setNickname] = useState(() => readPlayerName()),
     [settings, setSettings] = useState(initialSettings);
-  const [loading, setLoading] = useState(true),
+  const [loading, setLoading] = useState(
+      () =>
+        !!code ||
+        !cachedResponse("/api/catalog") ||
+        !cachedResponse("/api/player"),
+    ),
     [busy, setBusy] = useState(false);
   const [error, setError] = useState(""),
     [connected, setConnected] = useState(true);
@@ -168,7 +175,11 @@ export default function DuelPage() {
   useEffect(() => {
     mounted.current = true;
     const abort = new AbortController();
-    setLoading(true);
+    setLoading(
+      !!code ||
+        !cachedResponse("/api/catalog") ||
+        !cachedResponse("/api/player"),
+    );
     setError("");
     setRoom(null);
     stateRef.current = null;
