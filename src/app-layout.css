@@ -1,0 +1,555 @@
+/* Persistent app chrome. Native dialog stays in the browser's top layer.
+   Keep the existing rose brand; 6px controls, 14px turntable, flat content. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+.app-shell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-rows: 76px minmax(0, 1fr) 34px;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  /* Reserve all four insets once, outside the grid's fixed chrome rows. */
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  background: var(--white);
+}
+.app-shell[data-keyboard="open"] {
+  position: fixed;
+  top: var(--keyboard-top, 0px);
+  left: 0;
+  width: 100%;
+  height: var(--keyboard-height);
+  padding-bottom: 0;
+}
+dialog {
+  max-width: min(
+    480px,
+    calc(100% - var(--safe-left) - var(--safe-right) - 32px)
+  );
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px);
+  margin: auto;
+  inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dialog-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+.site-header {
+  grid-column: 1 / -1;
+  height: auto;
+  max-width: none;
+  background: var(--white);
+  padding-inline: 28px;
+}
+.brand {
+  gap: 11px;
+  padding-bottom: 0;
+  letter-spacing: normal;
+}
+.brand-mark {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: none;
+}
+.brand-wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.brand-wordmark strong {
+  font-size: 23px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+.brand-small {
+  position: static;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+}
+.disc-label .record-brand-mark {
+  width: 75%;
+  height: 75%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+.disc-label:has(.record-brand-mark)::after {
+  display: none;
+}
+.shell-rail {
+  grid-row: 2 / 4;
+  background: var(--white);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 24px 10px;
+}
+.shell-rail a,
+.shell-rail button {
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 70px;
+  text-decoration: none;
+  font-size: 11px;
+}
+.shell-rail svg {
+  width: 25px;
+  height: 25px;
+}
+.shell-rail .active {
+  background: var(--soft-accent);
+  color: var(--pink);
+}
+.shell-rail a:hover,
+.shell-rail button:hover {
+  background: var(--soft-accent);
+  transform: none;
+}
+.shell-content {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+  max-width: none;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-inline: clamp(24px, 4vw, 64px);
+  scrollbar-gutter: stable;
+  scroll-padding-block: 20px;
+  background: var(--paper);
+}
+.site-footer {
+  align-items: center;
+  grid-column: 2;
+  grid-row: 3;
+  max-width: none;
+  margin: 0;
+  min-height: 0;
+  padding: 8px 28px;
+  border-top: 1px solid var(--line);
+  background: var(--white);
+  font-size: 10px;
+}
+#home {
+  min-height: 100%;
+  display: grid;
+  align-items: center;
+}
+.hero {
+  width: 100%;
+  max-width: 1050px;
+  margin-inline: auto;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 1fr);
+  gap: clamp(32px, 5vw, 80px);
+  padding-block: 32px;
+}
+.hero-visual {
+  order: -1;
+  width: 100%;
+}
+.hero .turntable {
+  max-width: 430px;
+  margin-inline: auto;
+}
+.hero h1 {
+  font-size: clamp(26px, 2.5vw, 36px);
+  letter-spacing: -1px;
+}
+.hero .eyebrow {
+  margin-bottom: 12px;
+}
+.hero .intro {
+  font-size: 13px;
+  margin: 12px 0 26px;
+}
+.hero .setup {
+  max-width: none;
+}
+.deck-caption {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 24px auto 0;
+  max-width: 430px;
+}
+.regions,
+.mixes {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.field-label {
+  margin-bottom: 9px;
+}
+.region,
+.mix {
+  min-height: 42px;
+}
+.decades .mix {
+  padding-inline: 11px;
+}
+.start-button {
+  width: 100%;
+  margin-top: 6px;
+}
+#game {
+  max-width: 1050px;
+  padding-top: 26px;
+}
+#game .game-layout {
+  max-width: none;
+  gap: clamp(32px, 5vw, 80px);
+  grid-template-columns: minmax(240px, 400px) minmax(300px, 1fr);
+}
+#game .round-track {
+  margin-bottom: 36px;
+}
+.clip-stages {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 12px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+}
+.clip-stages li {
+  border-top: 3px solid var(--line);
+  padding: 10px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.clip-stages strong {
+  display: block;
+  font-size: 14px;
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.clip-stages .active {
+  border-color: var(--pink);
+  color: var(--pink);
+}
+.clip-stages .used {
+  opacity: 0.6;
+}
+.loop-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.guess-feedback {
+  color: var(--pink);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.guess-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.guess-actions .text-button {
+  font-size: 12px;
+}
+#results {
+  max-width: 1000px;
+  margin-inline: auto;
+  padding-top: 28px;
+}
+.admin-main {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.preview-progress {
+  height: 5px;
+  border-radius: 3px;
+}
+@media (max-width: 1023px) {
+  .app-shell {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+  .shell-rail {
+    padding-inline: 5px;
+  }
+  .hero {
+    gap: 28px;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(320px, 1fr);
+  }
+  .hero h1 {
+    font-size: 28px;
+  }
+  #game .game-layout {
+    gap: 28px;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1fr);
+  }
+}
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 66px minmax(0, 1fr) auto 62px;
+  }
+  .app-shell[data-keyboard="open"] {
+    grid-template-rows: 56px minmax(0, 1fr);
+  }
+  .app-shell[data-keyboard="open"] .shell-rail,
+  .app-shell[data-keyboard="open"] .site-footer {
+    display: none;
+  }
+  .app-shell[data-keyboard="open"] #guess-suggestions {
+    max-height: min(160px, 24dvh);
+  }
+  .app-shell[data-keyboard="open"] #submit-guess {
+    position: sticky;
+    bottom: 8px;
+    z-index: 2;
+  }
+  .site-header {
+    padding-inline: 18px;
+  }
+  .theme-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .shell-nav {
+    flex-shrink: 0;
+  }
+  .app-shell .shell-content input,
+  .app-shell .shell-content select,
+  .app-shell .shell-content textarea {
+    font-size: 16px;
+  }
+  .shell-content button,
+  .shell-content select,
+  .song-suggestion {
+    min-height: 44px;
+  }
+  .brand {
+    gap: 9px;
+  }
+  .brand > .brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+  .brand-wordmark strong {
+    font-size: 20px;
+    letter-spacing: -0.8px;
+  }
+  .brand-wordmark .brand-small {
+    font-size: 7px;
+    letter-spacing: 1.25px;
+  }
+  .shell-nav > .text-button,
+  .shell-nav > .view-front-link {
+    display: none;
+  }
+  .shell-rail {
+    grid-column: 1;
+    grid-row: 4;
+    flex-direction: row;
+    padding: 3px 16px;
+    gap: 8px;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+  }
+  .shell-rail a,
+  .shell-rail button {
+    flex: 1;
+    min-height: 52px;
+    gap: 4px;
+    font-size: 10px;
+  }
+  .shell-rail svg {
+    width: 22px;
+    height: 22px;
+  }
+  .shell-content {
+    grid-column: 1;
+    padding-inline: 20px;
+    scrollbar-gutter: auto;
+    padding-bottom: 20px;
+  }
+  .site-footer {
+    grid-column: 1;
+    font-size: 9px;
+    justify-content: center;
+    padding: 6px 12px;
+  }
+  .site-footer > span:first-child {
+    display: none;
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 12px;
+    padding-block: 24px;
+    align-items: center;
+  }
+  .hero-visual {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    width: 88px;
+    margin: 0;
+  }
+  .hero .turntable {
+    max-width: none;
+  }
+  .hero .deck-brand {
+    font-size: 7px;
+  }
+  .hero .deck-status,
+  .hero .disc-label > small,
+  .deck-caption {
+    display: none;
+  }
+  .hero .disc-label > span {
+    font-size: 24px;
+  }
+  .hero .tonearm {
+    width: 5px;
+  }
+  .hero .tonearm::before {
+    width: 16px;
+    height: 16px;
+    left: -7px;
+    border-width: 3px;
+  }
+  .hero .tonearm::after {
+    width: 8px;
+    height: 17px;
+  }
+  .hero-copy {
+    display: contents;
+  }
+  .hero .setup {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+  }
+  .hero .eyebrow {
+    display: none;
+  }
+  .hero h1 {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    font-size: 22px;
+    text-align: left;
+    margin: 0;
+  }
+  .hero .intro {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    font-size: 12px;
+    margin: 0;
+    text-align: left;
+  }
+  .regions,
+  .mixes {
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .region,
+  .mix {
+    padding: 9px 12px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+  .decades .mix {
+    flex: 1 1 calc(50% - 6px);
+    padding-inline: 6px;
+    font-size: 11px;
+  }
+  .decades {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #game {
+    padding-block: 12px;
+  }
+  #game .game-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  #game .round-track {
+    margin-block: 10px 12px;
+  }
+  #game .turntable {
+    max-width: 90px;
+  }
+  #game .deck-brand {
+    font-size: 7px;
+  }
+  #game .deck-status {
+    display: none;
+  }
+  #game .playback {
+    margin-block: 6px;
+  }
+  #game .game-heading {
+    margin-bottom: 0;
+  }
+  .clip-stages {
+    margin: 6px 0;
+  }
+  .clip-stages li {
+    padding-top: 3px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .clip-stages strong {
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  #game .clock-reading strong {
+    font-size: 28px;
+  }
+  #game .challenge-clock {
+    margin-block: 6px;
+    padding-block: 6px;
+  }
+  #game .question-panel h2 {
+    font-size: 21px;
+    line-height: 1.25;
+  }
+  #game .guess-form {
+    margin-block: 8px;
+  }
+  .history-row {
+    flex-wrap: wrap;
+  }
+  .admin-main .preview-player {
+    position: sticky;
+    bottom: 12px;
+    left: auto;
+    transform: none;
+    width: 100%;
+    margin-top: 20px;
+  }
+  .admin-main:has(.preview-player) {
+    padding-bottom: 24px;
+  }
+}

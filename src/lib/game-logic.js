@@ -21,7 +21,12 @@ export function matchesDecade(year, decade = "all") {
   const start = Number(decade.slice(0, 4));
   return Number(year) >= start && Number(year) < start + 10;
 }
-export const filterPool = (songs, region = "kr", category = "all", decade = "all") =>
+export const filterPool = (
+  songs,
+  region = "kr",
+  category = "all",
+  decade = "all",
+) =>
   songs.filter(
     (song) =>
       ["tw", "kr"].includes(region) &&
@@ -31,17 +36,22 @@ export const filterPool = (songs, region = "kr", category = "all", decade = "all
       (category === "all" || song.category === category),
   );
 
-export const scoreTiers = [
-  { until: 1000, points: 1000, label: "≤ 1 秒" },
-  { until: 3000, points: 800, label: "1–3 秒" },
-  { until: 5000, points: 600, label: "3–5 秒" },
-  { until: 10000, points: 400, label: "5–10 秒" },
-  { until: 20000, points: 200, label: "10–20 秒" },
-  { until: Infinity, points: 100, label: "> 20 秒" },
+export const clipTiers = [
+  { seconds: 1, points: 1000 },
+  { seconds: 6, points: 800 },
+  { seconds: 12, points: 600 },
+  { seconds: 18, points: 400 },
+  { seconds: 24, points: 200 },
+  { seconds: Infinity, points: 100 },
 ];
-export function pointsForTime(elapsedMs) {
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return 0;
-  return scoreTiers.find((tier) => elapsedMs <= tier.until).points;
+export function stagesForDuration(duration = 0) {
+  const end = Number.isFinite(duration) && duration > 0 ? duration : 30;
+  const stages = [];
+  for (const tier of clipTiers) {
+    stages.push({ ...tier, seconds: Math.min(tier.seconds, end) });
+    if (tier.seconds >= end) break;
+  }
+  return stages;
 }
 export function searchSongs(songs, query, limit = 8) {
   const q = normalize(query);

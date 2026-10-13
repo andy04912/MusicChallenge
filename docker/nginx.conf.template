@@ -13,7 +13,7 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     add_header X-Frame-Options DENY always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https://*.mzstatic.com; media-src https://*.mzstatic.com https://*.itunes.apple.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://*.mzstatic.com; media-src https://*.mzstatic.com https://*.itunes.apple.com; connect-src 'self' https://*.mzstatic.com https://*.itunes.apple.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 
     gzip on;
     gzip_vary on;
@@ -32,7 +32,8 @@ server {
         proxy_set_header Connection "";
         # Keep browser Origin, Cookie and X-CSRF-Token unchanged.
         proxy_connect_timeout 5s;
-        proxy_read_timeout 60s;
+        proxy_read_timeout 75s;
+        proxy_buffering off;
         proxy_cache off;
         proxy_hide_header X-Content-Type-Options;
         proxy_hide_header Referrer-Policy;
@@ -44,8 +45,19 @@ server {
     location = /index.html { expires -1; }
     location = /admin { expires -1; try_files /index.html =404; }
     location = /admin/ { expires -1; try_files /index.html =404; }
+    location = /leaderboard { expires -1; try_files /index.html =404; }
+    location = /duel { expires -1; try_files /index.html =404; }
+    location = /party { expires -1; try_files /index.html =404; }
+    location ~ "^/party/P[A-Za-z0-9_-]{15}/?$" { expires -1; try_files /index.html =404; }
+    location ~ "^/duel/[A-Za-z0-9_-]{6,32}/?$" { expires -1; try_files /index.html =404; }
+    location ~ "^/result/[A-Za-z0-9_-]{24}/?$" { expires -1; try_files /index.html =404; }
+    location = /manifest.webmanifest { default_type application/manifest+json; expires -1; try_files $uri =404; }
+    location = /sw.js { default_type application/javascript; expires -1; try_files $uri =404; }
+    location = /offline.html { expires -1; try_files $uri =404; }
+    location = /offline.css { expires -1; try_files $uri =404; }
     location /assets/ { expires 1y; try_files $uri =404; }
     location /images/ { expires -1; try_files $uri =404; }
+    location /icons/ { expires -1; try_files $uri =404; }
     location = /BARLOW-LICENSE.txt { try_files $uri =404; }
     # Never send the app shell for missing API, source or asset paths.
     location / { return 404; }

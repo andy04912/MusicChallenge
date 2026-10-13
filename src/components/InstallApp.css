@@ -1,0 +1,136 @@
+.pwa-controls {
+  display: flex;
+  align-items: center;
+  position: relative;
+  margin-left: auto;
+}
+.pwa-footer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 0 4px;
+  min-height: 24px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.pwa-footer-button svg {
+  width: 13px;
+  height: 13px;
+}
+.pwa-status {
+  position: absolute;
+  bottom: 28px;
+  right: 0;
+  width: min(270px, 70vw);
+  padding: 10px 12px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+  z-index: 30;
+}
+.install-dialog {
+  width: 340px;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.install-dialog::backdrop {
+  background: #0008;
+}
+.install-dialog > img {
+  border-radius: 12px;
+}
+.install-dialog h2 {
+  font-size: 21px;
+  margin: 14px 0 12px;
+}
+.install-dialog p {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0 0 10px;
+}
+.install-dialog .install-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+.install-dialog > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.install-dialog > div > button {
+  min-height: 44px;
+  font-size: 13px;
+}
+.install-close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+}
+.install-close svg {
+  width: 20px;
+  height: 20px;
+}
+@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) {
+  .player-shell .site-footer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    height: 24px;
+    min-height: 0;
+    padding-block: 0;
+    border-top: 0;
+  }
+  .player-shell .site-footer .pwa-controls {
+    margin-left: auto;
+    flex: none;
+  }
+  .player-shell .site-footer .footer-credit {
+    white-space: nowrap;
+    flex: none;
+    margin-left: 0;
+  }
+  .player-shell .site-footer .donate-link {
+    flex: none;
+  }
+  .player-shell .site-footer .pwa-footer-button {
+    min-height: 24px;
+  }
+}
+@media (max-height: 500px) {
+  .install-dialog {
+    width: 430px;
+    padding: 18px 24px;
+  }
+  .install-dialog > img {
+    display: none;
+  }
+  .install-dialog h2 {
+    margin: 0 0 8px;
+  }
+  .install-dialog > div {
+    margin-top: 8px;
+  }
+}

@@ -8,6 +8,19 @@ const songs = [
   { id: 3, title: "JUMP", artist: "BLACKPINK" },
 ];
 describe("React autocomplete", () => {
+  test("long artist results page without scrolling and paging never submits", async () => {
+    const user = userEvent.setup(), guess = vi.fn();
+    const tracks = Array.from({length: 6}, (_,i)=>({id:i+10,title:`Song ${i}`,artist:"Singer"}));
+    render(<GuessInput songs={tracks} onGuess={guess} />);
+    await user.type(screen.getByRole("combobox"), "Singer");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    await user.click(screen.getByRole("button",{name:"下一頁歌曲建議"}));
+    expect(screen.getByRole("option",{name:"Song 2 Singer"})).toBeVisible();
+    expect(guess).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("option",{name:"Song 2 Singer"}));
+    await user.click(screen.getByRole("button",{name:"送出答案"}));
+    expect(guess).toHaveBeenCalledWith({text:"Song 2",song:tracks[2]});
+  });
   test("artist search and keyboard selection require a separate submit", async () => {
     const user = userEvent.setup(),
       guess = vi.fn();

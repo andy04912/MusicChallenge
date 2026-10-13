@@ -1,435 +1,592 @@
+import LoadingState from "../components/LoadingState.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useOutletContext } from "react-router";
+import { readPlayerName, savePlayerName } from "../lib/player-name.js";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowUpRightIcon,
+  InfinityIcon,
+  VinylRecordIcon,
+  QuestionIcon,
 } from "@phosphor-icons/react";
-import {
-  filterPool,
-  isCorrectGuess,
-  pointsForTime,
-  decadeLabels,
-} from "../lib/game-logic.js";
+import { filterPool, decadeLabels, songKey } from "../lib/game-logic.js";
 import { appleURL, request } from "../lib/api.js";
 import GuessInput from "../components/GuessInput.jsx";
 import PreviewPlayer from "../components/PreviewPlayer.jsx";
-import ChallengeClock from "../components/ChallengeClock.jsx";
+import Turntable from "../components/Turntable.jsx";
+import ShareResultButton from "../components/ShareResultButton.jsx";
+import "./solo.css";
 
-const shuffle = (items) => {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+const activeRunKey = "music-challenge-active-run";
+function storedRun() {
+  try {
+    return sessionStorage.getItem(activeRunKey);
+  } catch {
+    return null;
   }
-  return copy;
-};
-const emptyGame = {
-  screen: "home",
-  rounds: [],
-  pool: [],
-  index: 0,
-  history: [],
-  verdict: null,
-};
+}
+function rememberRun(id) {
+  try {
+    id
+      ? sessionStorage.setItem(activeRunKey, id)
+      : sessionStorage.removeItem(activeRunKey);
+  } catch {
+    /* Private browsing can disallow storage. */
+  }
+}
+function Choices({ label, options, value, onChange, disabled }) {
+  return (
+    <fieldset className="solo-choices" disabled={disabled}>
+      <legend>{label}</legend>
+      <div>
+        {Object.entries(options).map(([key, text]) => (
+          <button
+            type="button"
+            key={key}
+            aria-pressed={value === key}
+            className={value === key ? "selected" : ""}
+            onClick={() => onChange(key)}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 export default function GamePage() {
+  const { setGameActive, showHelp } = useOutletContext() || {};
   const [catalog, setCatalog] = useState([]),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState("");
+    [nickname, setNickname] = useState(() => readPlayerName()),
+    [player, setPlayer] = useState(null);
   const [region, setRegion] = useState("kr"),
-    [mix, setMix] = useState("all"),
+    [category, setCategory] = useState("all"),
     [decade, setDecade] = useState("all"),
-    [game, setGame] = useState(emptyGame);
-  const clockStart = useRef(null);
-  const [startedAt, setStartedAt] = useState(null);
-  function resetClock() {
-    clockStart.current = null;
-    setStartedAt(null);
-  }
-  function beginClock() {
-    if (clockStart.current !== null || game.verdict) return;
-    clockStart.current = performance.now();
-    setStartedAt(clockStart.current);
-  }
-  const busy = useRef(false),
-    mounted = useRef(false),
-    next = useRef(null);
+    [mode, setMode] = useState("classic");
+  const [setupStep, setSetupStep] = useState(0),
+    [run, setRun] = useState(null),
+    [historyPage, setHistoryPage] = useState(0);
+  const [loading, setLoading] = useState(true),
+    [pending, setPending] = useState(false),
+    [error, setError] = useState("");
+  const alive = useRef(false),
+    busy = useRef(false),
+    runRef = useRef(null),
+    duration = useRef(0),
+    heardRound = useRef(null);
   const pool = useMemo(
-    () => filterPool(catalog, region, mix, decade),
-    [catalog, region, mix, decade],
+    () => [
+      ...new Map(
+        filterPool(
+          catalog,
+          run?.settings.region ?? region,
+          run?.settings.category ?? category,
+          run?.settings.decade ?? decade,
+        ).map((song) => [songKey(song), song]),
+      ).values(),
+    ],
+    [catalog, run, region, category, decade],
   );
-  const artists = useMemo(
-    () => [...new Set(pool.map((s) => s.artist))],
-    [pool],
-  );
-  const correctCount = game.history.filter((h) => h.correct).length;
-  const score = game.history.reduce((sum, h) => sum + h.points, 0);
+  const classicRounds = Math.min(5, pool.length);
+  const gameActive = !!run && run.status !== "finished";
   useEffect(() => {
-    mounted.current = true;
-    const controller = new AbortController();
-    request("/api/catalog", { signal: controller.signal })
-      .then(setCatalog)
-      .catch((err) => {
-        if (err.name !== "AbortError")
-          setError("題庫載入失敗，請確認網路連線後重試。");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => {
-      mounted.current = false;
-      controller.abort();
-    };
-  }, []);
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [game.screen]);
-  useEffect(() => {
-    if (game.verdict) next.current?.focus({ preventScroll: true });
-  }, [game.verdict]);
-  async function start() {
-    if (busy.current) return;
-    busy.current = true;
+    setGameActive?.(gameActive);
+    return () => setGameActive?.(false);
+  }, [gameActive, setGameActive]);
+  function accept(next) {
+    runRef.current = next;
+    setRun(next);
+    rememberRun(next.status === "finished" ? null : next.id);
+  }
+  async function load(signal) {
     setLoading(true);
     setError("");
     try {
-      const songs = await request("/api/catalog");
-      if (!mounted.current) return;
+      const [songs, guest] = await Promise.all([
+        request("/api/catalog", { signal }),
+        request("/api/player", { signal }),
+      ]);
+      if (!alive.current || signal?.aborted) return;
       setCatalog(songs);
-      const current = filterPool(songs, region, mix, decade);
-      if (current.length >= 5) {
-        resetClock();
-        setGame({
-          ...emptyGame,
-          screen: "game",
-          rounds: shuffle(current).slice(0, 5),
-          pool: current,
-        });
+      setPlayer(guest);
+      const savedName = readPlayerName(guest.nickname || "");
+      savePlayerName(savedName);
+      setNickname(savedName);
+      const saved = storedRun();
+      if (saved) {
+        try {
+          const previous = await request(
+            `/api/runs/${encodeURIComponent(saved)}`,
+            { signal },
+          );
+          if (alive.current && !signal?.aborted) accept(previous);
+        } catch (err) {
+          if (err.name === "AbortError") throw err;
+          if ([403, 404, 410].includes(err.status)) rememberRun(null);
+          else throw err;
+        }
       }
-    } catch {
-      if (mounted.current) setError("題庫載入失敗，請確認網路連線後重試。");
+    } catch (err) {
+      if (alive.current && err.name !== "AbortError")
+        setError(err.message || "連線失敗，請再試一次。");
     } finally {
-      busy.current = false;
-      if (mounted.current) setLoading(false);
+      if (alive.current && !signal?.aborted) setLoading(false);
     }
   }
-  function reveal(guess) {
-    if (guess !== null && clockStart.current === null) return;
-    const elapsedMs =
-      clockStart.current === null
-        ? null
-        : Math.max(0, performance.now() - clockStart.current);
-    setGame((current) => {
-      if (current.verdict || current.screen !== "game") return current;
-      const song = current.rounds[current.index],
-        skipped = guess === null,
-        correct = !skipped && isCorrectGuess(song, guess.text, guess.song);
-      const verdict = {
-        song,
-        correct,
-        skipped,
-        elapsedMs,
-        points: correct ? pointsForTime(elapsedMs) : 0,
-      };
-      return { ...current, verdict, history: [...current.history, verdict] };
+  useEffect(() => {
+    alive.current = true;
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => {
+      alive.current = false;
+      controller.abort();
+    };
+  }, []);
+  async function action(name, body = {}) {
+    if (busy.current || !runRef.current) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    const current = runRef.current;
+    try {
+      const next = await request(`/api/runs/${current.id}/${name}`, {
+        method: "POST",
+        body: JSON.stringify({ revision: current.revision, ...body }),
+      });
+      if (alive.current) accept(next);
+      return next;
+    } catch (err) {
+      if (alive.current) {
+        setError(err.message || "操作失敗，請再試一次。");
+        // A lost response may already have changed the server. Recover without
+        // resending a scored action, which could otherwise count twice.
+        try {
+          const latest = await request(`/api/runs/${current.id}`);
+          if (alive.current) accept(latest);
+        } catch {
+          /* Keep the actionable error and current view. */
+        }
+      }
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(false);
+    }
+  }
+  async function start() {
+    if (busy.current || !nickname.trim()) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    try {
+      if (nickname.trim() !== player?.nickname) {
+        const guest = await request("/api/player", {
+          method: "PATCH",
+          body: JSON.stringify({ nickname: nickname.trim() }),
+        });
+        if (alive.current) setPlayer(guest);
+      }
+      const next = await request("/api/runs", {
+        method: "POST",
+        body: JSON.stringify({ mode, region, category, decade }),
+      });
+      if (alive.current) {
+        duration.current = 0;
+        heardRound.current = null;
+        setHistoryPage(0);
+        accept(next);
+      }
+    } catch (err) {
+      if (alive.current) setError(err.message || "無法開始挑戰，請再試一次。");
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(false);
+    }
+  }
+  async function beganPlayback(playback) {
+    const current = runRef.current;
+    if (
+      !current ||
+      current.heard ||
+      current.status !== "playing" ||
+      heardRound.current === current.preview?.id
+    )
+      return;
+    heardRound.current = current.preview?.id;
+    const updated = await action("play", {
+      duration: playback?.duration || duration.current || 30,
     });
+    if (!updated) heardRound.current = null;
   }
-  function advance() {
-    if (!game.verdict) return;
-    resetClock();
-    setGame((current) =>
-      !current.verdict
-        ? current
-        : {
-            ...current,
-            screen: current.index === 4 ? "results" : "game",
-            index: current.index === 4 ? 4 : current.index + 1,
-            verdict: null,
-          },
-    );
+  function home() {
+    rememberRun(null);
+    runRef.current = null;
+    setRun(null);
+    setSetupStep(0);
+    setError("");
   }
-  if (game.screen === "home")
+  async function advance() {
+    duration.current = 0;
+    heardRound.current = null;
+    await action("next");
+  }
+  const statusMessage = error || (loading ? "正在準備題庫…" : "");
+  if (loading && !run) return <LoadingState label="正在準備題庫…" />;
+  if (!run)
     return (
-      <section id="home" aria-labelledby="home-title">
-        <div className="hero">
-          <div className="hero-copy">
-            <p className="eyebrow">FOR THE FANS. FOR THE MUSIC.</p>
-            <h1 id="home-title">
-              前奏一響，
-              <br />
-              你的本命藏不住。
-            </h1>
-            <p className="intro">
-              華語金曲、K-POP 熱歌，測測你的音樂雷達。
-              <br />
-              從熟悉的旋律，找到下一首單曲循環。
-            </p>
-            <div className="setup">
-              <span className="field-label" id="region-label">
-                今天想挑戰哪一種？
-              </span>
-              <div
-                className="regions"
-                role="group"
-                aria-labelledby="region-label"
-              >
-                {Object.entries({
-                  tw: "華語",
-                  kr: "K-POP",
-                }).map(([value, label]) => (
-                  <button
-                    key={value}
-                    className={`region ${region === value ? "active" : ""}`}
-                    aria-pressed={region === value}
-                    onClick={() => setRegion(value)}
-                    disabled={loading}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <span className="field-label" id="mix-label">
-                再挑一種聲音
-              </span>
-              <div className="mixes" role="group" aria-labelledby="mix-label">
-                {Object.entries({
-                  all: "男女合併",
-                  girl: "女聲／女團",
-                  boy: "男聲／男團",
-                }).map(([value, label]) => (
-                  <button
-                    key={value}
-                    className={`mix ${mix === value ? "active" : ""}`}
-                    aria-pressed={mix === value}
-                    onClick={() => setMix(value)}
-                    disabled={loading}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <span className="field-label" id="decade-label">挑個年代</span>
-              <div className="mixes decades" role="group" aria-labelledby="decade-label">
-                {Object.entries(decadeLabels).map(([value, label]) => (
-                  <button key={value} className={`mix ${decade === value ? "active" : ""}`}
-                    aria-pressed={decade === value} onClick={() => setDecade(value)} disabled={loading}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button
-                className="primary start-button"
-                onClick={start}
-                disabled={loading || (!error && pool.length < 5)}
-              >
-                {loading
-                  ? "準備題庫中…"
-                  : error
-                    ? "重新載入題庫"
-                    : pool.length >= 5
-                      ? "開始猜歌"
-                      : "歌曲準備中"}
-                <ArrowUpRightIcon aria-hidden="true" />
-              </button>
-              <p className="small muted" role="status">
-                {error ||
-                  (loading
-                    ? "正在連接你的音樂宇宙"
-                    : !catalog.length
-                      ? "新歌即將開放，敬請期待。"
-                      : pool.length < 5
-                        ? "這個分類的歌曲尚未準備齊全，請選擇其他分類或稍後再來。"
-                        : `${pool.length} 首精選，每輪 5 題，不需登入`)}
-              </p>
-            </div>
-          </div>
-          <div className="hero-visual">
-            <img
-              src="/images/record-hero.webp"
-              alt="玫紅唱片封套與黑膠唱片"
-              width="1254"
-              height="1254"
-              fetchPriority="high"
-            />
-          </div>
-        </div>
-        <div className="how-strip">
-          <div>
-            <p>
-              聽一段旋律<small>Apple 提供的歌曲試聽</small>
-            </p>
-          </div>
-          <div>
-            <p>
-              搶先猜中答案<small>1 秒內 1,000 分，越快分數越高</small>
-            </p>
-          </div>
-          <div>
-            <p>
-              把好歌帶回去<small>揭曉後前往 Apple Music</small>
-            </p>
-          </div>
-        </div>
-        <section className="rotation">
-          <div className="rotation-heading">
-            <h2>今天的聲音宇宙</h2>
-          </div>
-          <div className="artist-list">
-            {artists.map((artist) => (
-              <div key={artist} className="artist-chip">
-                {artist}
-                <small>
-                  {pool.filter((s) => s.artist === artist).length} tracks
-                </small>
-              </div>
-            ))}
-          </div>
-        </section>
-      </section>
-    );
-  if (game.screen === "results")
-    return (
-      <section id="results" aria-labelledby="results-title">
-        <div className="results-top">
-          <h1 id="results-title">
-            {correctCount === 5
-              ? "全中！你就是人形歌單。"
-              : correctCount >= 3
-                ? "你的音樂雷達，很靈。"
-                : "新歌單，已經有了靈感。"}
-          </h1>
-          <p className="muted">
-            本輪獲得 {score} 分。每一次聆聽，都離喜歡的音樂更近一點。
-          </p>
-          <div className="final-score">
-            <strong>{score.toLocaleString()}</strong>
-            <span>/ 5,000 分 · {correctCount} / 5 首猜中</span>
-          </div>
-          <button className="primary" onClick={() => setGame(emptyGame)}>
-            再聽一輪 <ArrowUpRightIcon />
-          </button>
-        </div>
-        <div className="results-heading">
-          <h2>這一輪，值得再聽一次。</h2>
-          <p className="muted">喜歡的旋律，去 Apple Music 繼續聽。</p>
-        </div>
-        <div className="song-history">
-          {game.history.map(({ song, correct, skipped, points, elapsedMs }) => (
-            <div key={song.id} className="history-row">
-              <img
-                src={song.artwork}
-                alt={`${song.album} 專輯封面`}
-                width="62"
-                height="62"
-              />
-              <div className="history-info">
-                <strong>{song.title}</strong>
-                <p>
-                  {song.artist} · {song.year}
-                </p>
-              </div>
-              <span className={`history-status ${correct ? "" : "skipped"}`}>
-                {correct
-                  ? `+${points.toLocaleString()} 分 · ${(elapsedMs / 1000).toFixed(2)} 秒`
-                  : skipped
-                    ? "已揭曉"
-                    : "答錯 · 0 分"}
-              </span>
-              <a
-                href={appleURL(song)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`在 Apple Music 聆聽 ${song.title}`}
-              >
-                Apple Music <ArrowUpRightIcon />
-              </a>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  const song = game.rounds[game.index],
-    verdict = game.verdict;
-  return (
-    <section
-      id="game"
-      aria-labelledby={verdict ? "answer-title" : "question-title"}
-    >
-      <div className="game-heading">
-        <button className="text-button" onClick={() => setGame(emptyGame)}>
-          <ArrowLeftIcon /> 回到選曲
-        </button>
-        <span>TRACK {String(game.index + 1).padStart(2, "0")} / 05</span>
-        <span className="score-label">
-          得分 <b>{score.toLocaleString()}</b>
-        </span>
-      </div>
-      <div
-        className="round-track"
-        aria-label={`第 ${game.index + 1} 題，共 5 題`}
+      <section
+        className="solo-screen solo-home"
+        aria-labelledby="solo-home-title"
       >
-        {game.rounds.map((s, i) => (
-          <span
-            key={s.id}
-            className={`round-mark ${i === game.index ? "current" : i < game.index ? "done" : ""}`}
-          />
-        ))}
-      </div>
-      <div className="game-layout">
-        <PreviewPlayer
-          key={song.id}
-          song={song}
-          revealed={!!verdict}
-          onPlaybackStarted={beginClock}
-        />
-        <div className="question-panel">
-          {!verdict ? (
-            <div>
-              <h2 id="question-title">猜猜這首歌</h2>
-              <ChallengeClock key={`clock-${song.id}`} startedAt={startedAt} />
-              <GuessInput
-                key={song.id}
-                songs={game.pool}
-                onGuess={reveal}
-                disabled={startedAt === null}
+        <div className="solo-home-heading">
+          <div className="solo-home-record">
+            <Turntable playing decorative />
+          </div>
+          <div>
+            <p className="solo-kicker">PRESS PLAY. TAKE THE CHALLENGE.</p>
+            <h1 id="solo-home-title">一秒，聽出你的歌。</h1>
+            <p>按播放聽一段，用最少提示拿高分。</p>
+          </div>
+        </div>
+        <div className="solo-setup">
+          <div className="solo-step-heading">
+            <span>選擇你的挑戰</span>
+            <span aria-label={`設定第 ${setupStep + 1} 步，共 2 步`}>
+              0{setupStep + 1} / 02
+            </span>
+          </div>
+          {setupStep === 0 ? (
+            <>
+              <div className="solo-name">
+                <label htmlFor="player-nickname">排行榜暱稱</label>
+                <input
+                  id="player-nickname"
+                  type="text"
+                  maxLength={20}
+                  value={nickname}
+                  onChange={(event) => {
+                    savePlayerName(event.target.value);
+                    setNickname(event.target.value);
+                  }}
+                  placeholder="取個大家記得的名字"
+                  autoComplete="nickname"
+                  disabled={loading || pending}
+                />
+              </div>
+              <div
+                className="solo-mode-options"
+                role="group"
+                aria-label="挑戰模式"
+              >
+                <button
+                  className={mode === "classic" ? "selected" : ""}
+                  aria-pressed={mode === "classic"}
+                  onClick={() => setMode("classic")}
+                  disabled={loading || pending}
+                >
+                  <VinylRecordIcon />
+                  <strong>經典挑戰</strong>
+                  <span>最多 5 首，衝最高分</span>
+                </button>
+                <button
+                  className={mode === "endless" ? "selected" : ""}
+                  aria-pressed={mode === "endless"}
+                  onClick={() => setMode("endless")}
+                  disabled={loading || pending}
+                >
+                  <InfinityIcon />
+                  <strong>無限挑戰</strong>
+                  <span>一首接一首，隨時結算</span>
+                </button>
+              </div>
+              <Choices
+                label="曲庫"
+                options={{ tw: "華語", kr: "K-POP" }}
+                value={region}
+                onChange={setRegion}
+                disabled={loading || pending}
               />
-              <button className="text-button skip" onClick={() => reveal(null)}>
-                直接揭曉 <ArrowRightIcon />
+              <button
+                className="primary solo-primary"
+                disabled={loading || pending || !nickname.trim()}
+                onClick={() => setSetupStep(1)}
+              >
+                下一步：選擇歌曲 <ArrowRightIcon />
               </button>
-            </div>
+            </>
           ) : (
-            <div aria-live="polite">
-              <p className="verdict">
-                {verdict.correct
-                  ? `答對了！ +${verdict.points.toLocaleString()} 分`
-                  : verdict.skipped
-                    ? "答案揭曉"
-                    : "答錯了 · 0 分"}
+            <>
+              <p className="solo-settings-summary">
+                {mode === "classic" ? `經典 ${classicRounds} 首` : "無限挑戰"} ·{" "}
+                {region === "tw" ? "華語" : "K-POP"}
               </p>
-              {verdict.elapsedMs !== null && (
-                <p className="answer-time">
-                  作答時間 {(verdict.elapsedMs / 1000).toFixed(2)} 秒
-                  {!verdict.correct && " · 本題 0 分"}
+              <Choices
+                label="聲音"
+                options={{
+                  all: "不限",
+                  boy: "男聲／男團",
+                  girl: "女聲／女團",
+                }}
+                value={category}
+                onChange={setCategory}
+                disabled={pending}
+              />
+              <Choices
+                label="年代"
+                options={decadeLabels}
+                value={decade}
+                onChange={setDecade}
+                disabled={pending}
+              />
+              <div className="solo-setup-actions">
+                <button
+                  className="text-button"
+                  onClick={() => setSetupStep(0)}
+                  disabled={pending}
+                >
+                  <ArrowLeftIcon />
+                  上一步
+                </button>
+                <button
+                  className="primary solo-primary"
+                  onClick={start}
+                  disabled={pending || !pool.length}
+                >
+                  {pending ? "準備開始…" : "開始猜歌"}
+                  <ArrowUpRightIcon />
+                </button>
+              </div>
+              {!pool.length && (
+                <p className="solo-pool-note">
+                  這個分類暫時沒有歌曲，試試其他選項。
                 </p>
               )}
-              <h2 id="answer-title">{song.title}</h2>
-              <p className="answer-artist">{song.artist}</p>
-              <p className="muted album-detail">
-                {song.album} · {song.year}
+            </>
+          )}
+          <p className="solo-message" role={error ? "alert" : "status"}>
+            {statusMessage}
+          </p>
+          {error && (
+            <button className="text-button" onClick={() => load()}>
+              重新載入題庫
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  if (run.status === "finished") {
+    const pages = Math.max(1, Math.ceil(run.history.length / 2)),
+      page = Math.min(historyPage, pages - 1);
+    return (
+      <section
+        className="solo-screen solo-results"
+        aria-labelledby="solo-results-title"
+      >
+        <p className="solo-kicker">CHALLENGE COMPLETE</p>
+        <h1 id="solo-results-title">這一輪，聽得漂亮。</h1>
+        <div className="solo-final-score">
+          <strong>{run.score.toLocaleString()}</strong>
+          <span>
+            {run.correct} / {run.played} 首猜中 ·{" "}
+            {run.mode === "classic" ? "經典" : "無限"}挑戰
+          </span>
+        </div>
+        <p className="solo-results-note">成績已記錄，可從排行榜查看。</p>
+        <div className="solo-history" aria-label="本輪歌曲">
+          {run.history.slice(page * 2, page * 2 + 2).map((item) => (
+            <article className="solo-history-row" key={item.round}>
+              <img src={item.song.artwork} alt="" width="44" height="44" />
+              <div>
+                <strong>{item.song.title}</strong>
+                <span>{item.song.artist}</span>
+              </div>
+              <b>+{item.points}</b>
+              <a
+                href={appleURL(item.song)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`在 Apple Music 聆聽 ${item.song.title}`}
+              >
+                <ArrowUpRightIcon />
+              </a>
+            </article>
+          ))}
+        </div>
+        {pages > 1 && (
+          <div className="solo-pagination">
+            <button
+              className="text-button"
+              disabled={page === 0}
+              onClick={() => setHistoryPage(page - 1)}
+              aria-label="上一頁歌曲"
+            >
+              <ArrowLeftIcon />
+            </button>
+            <span>
+              {page + 1} / {pages}
+            </span>
+            <button
+              className="text-button"
+              disabled={page === pages - 1}
+              onClick={() => setHistoryPage(page + 1)}
+              aria-label="下一頁歌曲"
+            >
+              <ArrowRightIcon />
+            </button>
+          </div>
+        )}
+        <div className="result-finished-actions">
+          <button className="primary solo-primary" onClick={home}>
+            再挑戰一次
+            <ArrowRightIcon />
+          </button>
+          <ShareResultButton sessionId={run.id} />
+        </div>
+        <p className="solo-message" role="alert">
+          {error}
+        </p>
+      </section>
+    );
+  }
+  const revealed = run.status === "revealed",
+    song = run.answer || run.preview;
+  return (
+    <section
+      className={`solo-screen solo-game ${revealed ? "is-revealed" : ""}`}
+      aria-labelledby={revealed ? "solo-answer-title" : "solo-question-title"}
+    >
+      <div className="solo-game-heading">
+        <button
+          className="text-button solo-finish"
+          onClick={() => action("finish")}
+          disabled={pending}
+        >
+          結束挑戰
+        </button>
+        <span className="solo-round">
+          {run.mode === "endless" ? "∞" : "TRACK"}{" "}
+          {String(run.round).padStart(2, "0")}
+          {run.totalRounds
+            ? ` / ${String(run.totalRounds).padStart(2, "0")}`
+            : ""}
+        </span>
+        <div className="solo-score-tools">
+          <strong className="solo-header-score">
+            {run.score.toLocaleString()}
+            <small> 分</small>
+          </strong>
+          <button
+            className="game-help"
+            aria-label="玩法說明"
+            onClick={showHelp}
+          >
+            <QuestionIcon />
+          </button>
+        </div>
+      </div>
+      <div className="solo-game-body">
+        <PreviewPlayer
+          key={run.preview.id}
+          song={song}
+          revealed={revealed}
+          limit={run.clipSeconds}
+          fullDuration={run.duration}
+          aboveRecord={
+            <div
+              className="solo-stage-score"
+              aria-label={`累積 ${run.score.toLocaleString()} 分`}
+            >
+              <span>累積分數</span>
+              <strong>
+                {run.score.toLocaleString()}
+                <small> 分</small>
+              </strong>
+            </div>
+          }
+          stagePoints={run.points}
+          onPlaybackStarted={beganPlayback}
+          onDuration={(value) => {
+            duration.current = value;
+          }}
+          onExtend={() => action("extend")}
+          canExtend={
+            run.canExtend ??
+            (!revealed &&
+              run.stage < 5 &&
+              run.clipSeconds < (run.duration || duration.current || 30))
+          }
+          extendDisabled={pending || !run.heard}
+          disabled={pending}
+        >
+          {revealed && (
+            <div className="solo-answer-heading" aria-live="polite">
+              <p className="solo-verdict">
+                {run.lastResult?.correct
+                  ? `答對了！ +${run.lastResult.points.toLocaleString()} 分`
+                  : "答案揭曉 · 0 分"}
               </p>
+              <h2 id="solo-answer-title">{song.title}</h2>
+              <p className="solo-artist">{song.artist}</p>
+            </div>
+          )}
+        </PreviewPlayer>
+        <div className="solo-question">
+          {!revealed ? (
+            <>
+              <h2 id="solo-question-title" className="sr-only">
+                猜猜這首歌
+              </h2>
+              <p className="solo-feedback" role="status">
+                {run.feedback ||
+                  (run.heard ? "歌名或歌手都可以搜尋" : "按播放，聽完再猜")}
+              </p>
+              <GuessInput
+                key={`${run.preview.id}-${run.stage}`}
+                songs={pool}
+                onGuess={(guess) =>
+                  action("guess", {
+                    answer: guess.text,
+                    ...(guess.song ? { songId: guess.song.id } : {}),
+                  })
+                }
+                disabled={pending || !run.heard}
+              />
+              <button
+                className="text-button solo-reveal"
+                onClick={() => action("reveal")}
+                disabled={pending}
+              >
+                不知道，揭曉答案
+              </button>
+            </>
+          ) : (
+            <div className="solo-answer solo-answer-actions">
               <a
                 className="apple-link"
                 href={appleURL(song)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                在 Apple Music 聆聽 <ArrowUpRightIcon />
+                在 Apple Music 聆聽
+                <ArrowUpRightIcon />
               </a>
-              <button ref={next} className="primary next" onClick={advance}>
-                {game.index === 4 ? "看看本輪成績" : "下一首"}
+              <button
+                className="primary solo-primary"
+                onClick={advance}
+                disabled={pending}
+              >
+                {pending
+                  ? "準備中…"
+                  : run.totalRounds && run.round >= run.totalRounds
+                    ? "看看本輪成績"
+                    : "下一首"}
                 <ArrowRightIcon />
               </button>
             </div>
           )}
+          <p className="solo-message" role="alert">
+            {error}
+          </p>
         </div>
       </div>
     </section>

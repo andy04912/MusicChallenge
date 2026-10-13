@@ -1,0 +1,38 @@
+{
+  "id": "/",
+  "name": "Music Challenge",
+  "short_name": "Music Challenge",
+  "description": "華語與 K-POP 猜歌挑戰，從一秒試聽開始。",
+  "lang": "zh-Hant",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#C6275D",
+  "background_color": "#F5F3EE",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "開始猜歌", "url": "/" },
+    { "name": "好友對戰", "url": "/duel" },
+    { "name": "派對模式", "url": "/party" },
+    { "name": "排行榜", "url": "/leaderboard" }
+  ]
+}

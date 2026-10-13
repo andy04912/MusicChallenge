@@ -1,16 +1,39 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
+import BrandMark from "./BrandMark.jsx";
+import HowToPlay from "./HowToPlay.jsx";
+import InstallApp from "./InstallApp.jsx";
+import { setPWAActivity } from "../lib/pwa.js";
+import useMobileViewport from "../lib/useMobileViewport.js";
 import {
   ArrowUpRightIcon,
-  XIcon,
+  HeartIcon,
+  TrophyIcon,
+  UsersThreeIcon,
   MoonIcon,
   SunIcon,
+  VinylRecordIcon,
+  QuestionIcon,
+  SlidersHorizontalIcon,
+  ConfettiIcon,
 } from "@phosphor-icons/react";
 
 export default function AppShell() {
   const location = useLocation(),
-    dialog = useRef(null);
+    dialog = useRef(null),
+    shell = useRef(null);
+  useMobileViewport(shell);
   const admin = location.pathname.startsWith("/admin");
+  const [gameActive, setGameActive] = useState(false);
+  useEffect(() => {
+    setPWAActivity(gameActive);
+    return () => setPWAActivity(false);
+  }, [gameActive]);
+  const [helpStep, setHelpStep] = useState(0);
+  const showHelp = useCallback((mode) => {
+    setHelpStep(mode === "party" ? 4 : 0);
+    dialog.current?.showModal();
+  }, []);
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("theme") || "system";
@@ -26,8 +49,8 @@ export default function AppShell() {
   }, [theme]);
   useEffect(() => {
     document.title = admin
-      ? "歌曲管理｜Seoul Signal"
-      : "Seoul Signal｜華語・K-POP 猜歌";
+      ? "歌曲管理｜Music Challenge"
+      : "Music Challenge｜華語・K-POP 猜歌";
     window.scrollTo(0, 0);
   }, [admin, location.pathname]);
   function toggleTheme() {
@@ -38,34 +61,29 @@ export default function AppShell() {
     setTheme(dark ? "light" : "dark");
   }
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${admin ? "admin-shell" : "player-shell"} ${gameActive && !admin ? "is-playing" : ""}`}
+      ref={shell}
+    >
       <a className="skip-link" href="#main-content">
         跳至主要內容
       </a>
       <header className="site-header wrap">
-        <Link to="/" className="brand">
-          seoul
-          <span className="brand-icon" aria-hidden="true">
-            ✳
-          </span>
-          signal
-          <span className="brand-small">
-            {admin ? "MUSIC CONTROL ROOM" : "MANDO / K-POP CLUB"}
+        <Link to="/" className="brand" aria-label="Music Challenge 首頁">
+          <BrandMark />
+          <span className="brand-wordmark">
+            <strong>Music Challenge</strong>
+            <span className="brand-small">
+              {admin ? "MUSIC CONTROL ROOM" : "LISTEN. GUESS. WIN."}
+            </span>
           </span>
         </Link>
         <nav className="shell-nav" aria-label="主要導覽">
           {admin ? (
-            <Link to="/">
+            <Link to="/" className="view-front-link">
               查看前台 <ArrowUpRightIcon aria-hidden="true" />
             </Link>
-          ) : (
-            <button
-              className="text-button"
-              onClick={() => dialog.current.showModal()}
-            >
-              玩法說明 <ArrowUpRightIcon aria-hidden="true" />
-            </button>
-          )}
+          ) : null}
           <button
             className="theme-toggle"
             aria-label="切換明暗模式"
@@ -76,64 +94,78 @@ export default function AppShell() {
           </button>
         </nav>
       </header>
+      <aside className="shell-rail" aria-label="功能導覽">
+        <Link
+          to="/"
+          className={location.pathname === "/" ? "active" : ""}
+          aria-current={location.pathname === "/" ? "page" : undefined}
+        >
+          <VinylRecordIcon />
+          <span>猜歌</span>
+        </Link>
+        {!admin && (
+          <>
+            <Link
+              to="/duel"
+              className={location.pathname.startsWith("/duel") ? "active" : ""}
+              aria-current={
+                location.pathname.startsWith("/duel") ? "page" : undefined
+              }
+            >
+              <UsersThreeIcon />
+              <span>好友對戰</span>
+            </Link>
+            <Link
+              to="/party"
+              className={location.pathname.startsWith("/party") ? "active" : ""}
+              aria-current={
+                location.pathname.startsWith("/party") ? "page" : undefined
+              }
+            >
+              <ConfettiIcon />
+              <span>派對</span>
+            </Link>
+            <Link
+              to="/leaderboard"
+              className={location.pathname === "/leaderboard" ? "active" : ""}
+              aria-current={
+                location.pathname === "/leaderboard" ? "page" : undefined
+              }
+            >
+              <TrophyIcon />
+              <span>排行榜</span>
+            </Link>
+          </>
+        )}
+        <button onClick={() => dialog.current.showModal()}>
+          <QuestionIcon />
+          <span>玩法</span>
+        </button>
+        {admin && (
+          <Link to="/admin" className="active" aria-current="page">
+            <SlidersHorizontalIcon />
+            <span>歌曲管理</span>
+          </Link>
+        )}
+      </aside>
       <main id="main-content" className="wrap shell-content">
-        <Outlet />
+        <Outlet key={location.key} context={{ setGameActive, showHelp }} />
       </main>
       <footer className="site-footer wrap">
-        <span>
-          SEOUL SIGNAL <span className="footer-star">✳</span> MADE FOR YOUR NEXT
-          FAVORITE.
-        </span>
-        <span>音樂試聽來源：Apple iTunes · 非 Apple 官方網站</span>
-      </footer>
-      <dialog
-        ref={dialog}
-        id="how-dialog"
-        aria-labelledby="how-title"
-        onClick={(event) => {
-          if (event.target === dialog.current) {
-            const r = dialog.current.getBoundingClientRect();
-            if (
-              event.clientX < r.left ||
-              event.clientX > r.right ||
-              event.clientY < r.top ||
-              event.clientY > r.bottom
-            )
-              dialog.current.close();
-          }
-        }}
-      >
-        <button
-          className="text-button dialog-close"
-          aria-label="關閉說明"
-          onClick={() => dialog.current.close()}
+        <span>APPLE MUSIC PREVIEWS</span>
+        <span className="footer-credit">試聽來源：Apple iTunes</span>
+        <InstallApp allowed={!admin && !gameActive} />
+        <a
+          className="donate-link"
+          href="https://portaly.cc/bradydamove/support"
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          <XIcon />
-        </button>
-        <h2 id="how-title">
-          熟悉的歌，
-          <br />
-          換個方式遇見。
-        </h2>
-        <ol>
-          <li>
-            選擇華語或
-            K-POP，兩種曲庫不混搭；再選女聲／女團、男聲／男團或男女合併，每輪隨機抽五首。
-          </li>
-          <li>點擊播放，聆聽 Apple 提供的試聽片段，可隨時暫停或重播。</li>
-          <li>
-            輸入完整歌名，或輸入歌名／歌手搜尋並選擇歌曲，再送出答案。每題答對的
-            分數依首次播放至送出的時間計算：1 秒內 1,000 分、3 秒內 800 分、5
-            秒內 600 分、10 秒內 400 分、20 秒內 200 分，超過 20 秒 100
-            分。暫停、重播仍持續計時；答錯或直接揭曉 0 分。
-          </li>
-          <li>認識歌手與專輯，前往 Apple Music 聽更多。</li>
-        </ol>
-        <p className="small muted">
-          試聽為 Apple
-          選定的片段，可能不是歌曲開頭。曲目供應會因地區或時間變動。題庫以台灣商店為準。
-        </p>
-      </dialog>
+          <HeartIcon aria-hidden="true" weight="fill" />
+          Donate Me!
+        </a>
+      </footer>
+      <HowToPlay dialog={dialog} step={helpStep} setStep={setHelpStep} />
     </div>
   );
 }

@@ -1,0 +1,48 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f5f3ee;
+  color: #232321;
+  font-family: Arial, "PingFang TC", sans-serif;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+  overflow: hidden;
+}
+main {
+  max-width: 340px;
+}
+img {
+  width: 72px;
+  height: 72px;
+}
+p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #6d6b67;
+}
+h1 {
+  font-size: 25px;
+  line-height: 1.3;
+}
+a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  background: #c6275d;
+  color: white;
+  padding: 12px 22px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 700;
+}
+small {
+  display: block;
+  margin-top: 24px;
+  color: #6d6b67;
+}
