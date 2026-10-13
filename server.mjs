@@ -26,7 +26,11 @@ db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','archived')),
    updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
  );
- CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS admin_sessions (
+   tokenHash TEXT PRIMARY KEY, csrf TEXT NOT NULL,
+   createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+ );`);
 const seed = JSON.parse(await readFile(resolve(base, 'seeds/catalog.json'), 'utf8'));
 // Existing imports have no reliable country metadata. Only known K-pop seeds
 // can be classified automatically; chart storefront is not song origin.
@@ -55,13 +59,35 @@ if (!db.prepare("SELECT value FROM settings WHERE key='seeded'").get()) {
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
 }
-const salt = randomBytes(32), passwordHash = scryptSync(password, salt, 64);
-const sessions = new Map(), attempts = new Map();
+// Persist sessions with the catalog volume. Only token digests are stored.
+// Keep password-change revocation without expiring sessions on process restart.
+let authSalt = db.prepare("SELECT value FROM settings WHERE key='authSalt'").get()?.value;
+if (!authSalt) {
+  authSalt = randomBytes(32).toString('hex');
+  db.prepare("INSERT INTO settings (key,value) VALUES ('authSalt',?)").run(authSalt);
+}
+const salt = Buffer.from(authSalt, 'hex'), passwordHash = scryptSync(password, salt, 64);
+const verifier = passwordHash.toString('hex');
+const previousVerifier = db.prepare("SELECT value FROM settings WHERE key='authVerifier'").get()?.value;
+if (previousVerifier !== verifier) {
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM admin_sessions').run();
+    db.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('authVerifier',?)").run(verifier);
+    db.exec('COMMIT');
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+}
+const attempts = new Map();
 const hash = text => createHash('sha256').update(text).digest('hex');
-const sessionLife = 8 * 60 * 60 * 1000;
+const readSession = db.prepare('SELECT tokenHash AS key,csrf FROM admin_sessions WHERE tokenHash=?');
+const saveSession = db.prepare('INSERT INTO admin_sessions (tokenHash,csrf) VALUES (?,?)');
+const removeSession = db.prepare('DELETE FROM admin_sessions WHERE tokenHash=?');
+const cookieLifetimeSeconds = 400 * 24 * 60 * 60;
+function sessionCookie(res, token, maxAge = cookieLifetimeSeconds) {
+  res.setHeader('Set-Cookie', `admin_session=${token}; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=${maxAge}${production ? '; Secure' : ''}`);
+}
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const cleanup = setInterval(() => {
-  for (const [key, session] of sessions) if (session.expires < Date.now()) sessions.delete(key);
   for (const [key, attempt] of attempts) if (attempt.until < Date.now()) attempts.delete(key);
 }, 60000).unref();
 function json(res, status, body) {
@@ -80,9 +106,9 @@ function sameOrigin(req) {
 }
 function sessionFor(req) {
   const token = (req.headers.cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('admin_session='))?.slice(14);
-  const session = token && sessions.get(hash(token));
-  if (!session || session.expires < Date.now()) throw fail(401, '請先登入後台。');
-  return { key: hash(token), ...session };
+  const session = token && /^[A-Za-z0-9_-]{43}$/.test(token) && readSession.get(hash(token));
+  if (!session) throw fail(401, '請先登入後台。');
+  return { ...session, token };
 }
 function idsFrom(ids) {
   if (!Array.isArray(ids) || !ids.length || ids.length > 200 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw fail(400, '請選擇 1 至 200 首歌曲。');
@@ -144,9 +170,8 @@ const server = createServer(async (req, res) => {
       if (typeof input.password !== 'string' || input.password.length > 512 || !timingSafeEqual(scryptSync(input.password, salt, 64), passwordHash)) throw fail(401, '密碼不正確。');
       attempts.delete(key);
       const token = randomBytes(32).toString('base64url'), csrf = randomBytes(24).toString('base64url');
-      if (sessions.size > 100) sessions.delete(sessions.keys().next().value);
-      sessions.set(hash(token), { csrf, expires: now + sessionLife });
-      res.setHeader('Set-Cookie', `admin_session=${token}; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=28800${production ? '; Secure' : ''}`);
+      saveSession.run(hash(token), csrf);
+      sessionCookie(res, token);
       return json(res, 200, { csrf });
     }
     if (path.startsWith('/api/admin/')) {
@@ -155,10 +180,12 @@ const server = createServer(async (req, res) => {
         sameOrigin(req);
         if (req.headers['x-csrf-token'] !== session.csrf) throw fail(403, '操作驗證過期，請重新登入。');
       }
+      // Refresh the persistent browser cookie on authenticated activity.
+      sessionCookie(res, session.token);
       if (path === '/api/admin/session' && method === 'GET') return json(res, 200, { csrf: session.csrf });
       if (path === '/api/admin/logout' && method === 'POST') {
-        sessions.delete(session.key);
-        res.setHeader('Set-Cookie', `admin_session=; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=0${production ? '; Secure' : ''}`);
+        removeSession.run(session.key);
+        sessionCookie(res, '', 0);
         return json(res, 200, { ok: true });
       }
       if (path === '/api/admin/songs' && method === 'GET') return json(res, 200, db.prepare('SELECT * FROM songs ORDER BY updatedAt DESC,id DESC').all());

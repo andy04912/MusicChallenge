@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
@@ -25,7 +27,7 @@ test('admin authorization, release states, import, and restart persistence', asy
   }
   async function stop() { if(child && child.exitCode === null){const done=once(child,'exit');child.kill();await done;} }
   const request = (path, options={}) => fetch(origin+path,{...options,headers:{'Content-Type':'application/json',Origin:origin,...(cookie?{Cookie:cookie}:{}),...(csrf?{'X-CSRF-Token':csrf}:{}),...options.headers}});
-  async function login() {const r=await request('/api/admin/login',{method:'POST',body:JSON.stringify({password:'local-integration-password-only'})});assert.equal(r.status,200);cookie=r.headers.get('set-cookie').split(';')[0];csrf=(await r.json()).csrf;assert.ok(r.headers.get('set-cookie').includes('HttpOnly'));assert.ok(r.headers.get('set-cookie').includes('SameSite=Strict'));}
+  async function login() {const r=await request('/api/admin/login',{method:'POST',body:JSON.stringify({password:'local-integration-password-only'})});assert.equal(r.status,200);cookie=r.headers.get('set-cookie').split(';')[0];csrf=(await r.json()).csrf;assert.ok(r.headers.get('set-cookie').includes('HttpOnly'));assert.ok(r.headers.get('set-cookie').includes('SameSite=Strict'));assert.match(r.headers.get('set-cookie'),/Max-Age=34560000/);}
   t.after(async()=>{await stop();assert.equal(dirname(resolve(dir)),resolve(tmpdir()));await rm(dir,{recursive:true,force:true});});
   await boot();
   await t.test('React app shell and generated assets serve on both entry routes, with no source or API fallback',async()=>{
@@ -91,9 +93,19 @@ test('admin authorization, release states, import, and restart persistence', asy
     assert.equal((await (await request('/api/catalog')).json()).length,3);
   });
   await stop(); await boot();
-  await t.test('database state persists across restart, sessions do not',async()=>{
-    assert.equal((await request('/api/admin/session')).status,401);
-    cookie='';csrf=''; await login();
+  await t.test('database and login persist across restart with the original cookie and CSRF token',async()=>{
+    const session = await request('/api/admin/session');
+    assert.equal(session.status,200);
+    assert.equal((await session.json()).csrf,csrf);
+    assert.match(session.headers.get('set-cookie'),/Max-Age=34560000/);
+    assert.ok(session.headers.get('set-cookie').startsWith(cookie+';'));
+    const saved = new DatabaseSync(join(dir,'songs.sqlite'));
+    const token = cookie.split('=')[1];
+    const stored = saved.prepare('SELECT * FROM admin_sessions WHERE tokenHash=?').get(createHash('sha256').update(token).digest('hex'));
+    assert.ok(stored);assert.equal(JSON.stringify(stored).includes(token),false);
+    // Age alone must not invalidate an otherwise valid persistent session.
+    saved.prepare("UPDATE admin_sessions SET createdAt='2000-01-01T00:00:00Z'").run();saved.close();
+    assert.equal((await request('/api/admin/session')).status,200);
     const rows=await (await request('/api/admin/songs')).json();assert.equal(rows.length,38);assert.equal(rows.find(s=>s.id===ids[2]).region,'tw');assert.equal(rows.find(s=>s.id===999999).region,'tw');
     assert.equal(rows.find(s=>s.id===ids[0]).status,'archived');assert.equal(rows.find(s=>s.id===ids[1]).category,'other');
     assert.equal((await (await request('/api/catalog')).json()).length,3);
@@ -101,13 +113,20 @@ test('admin authorization, release states, import, and restart persistence', asy
     assert.deepEqual(await response.json(),{imported:0,skipped:1});
     assert.equal((await (await request('/api/admin/songs')).json()).find(s=>s.id===999999).category,'boy');
   });
-  await t.test('logout invalidates the server-side session',async()=>{
-    assert.equal((await request('/api/admin/logout',{method:'POST',body:'{}'})).status,200);
+  await t.test('logout revokes only that session and cannot be replayed',async()=>{
+    const otherLogin=await request('/api/admin/login',{method:'POST',body:JSON.stringify({password:'local-integration-password-only'})});
+    assert.equal(otherLogin.status,200);
+    const otherCookie=otherLogin.headers.get('set-cookie').split(';')[0], otherCsrf=(await otherLogin.json()).csrf;
+    const loggedOut = await request('/api/admin/logout',{method:'POST',body:'{}'});
+    assert.equal(loggedOut.status,200);assert.match(loggedOut.headers.get('set-cookie'),/Max-Age=0/);
     assert.equal((await request('/api/admin/songs')).status,401);
+    assert.equal((await request('/api/admin/session',{headers:{Cookie:otherCookie}})).status,200);
+    assert.equal((await request('/api/admin/logout',{method:'POST',headers:{Cookie:otherCookie,'X-CSRF-Token':otherCsrf},body:'{}'})).status,200);
   });
   await stop();
   await boot({SERVE_STATIC:'false', NODE_ENV:'production', APP_ORIGIN:'https://music.example.test'});
   await t.test('API-only deployment exposes no frontend and retains production cookie and origin protections', async()=>{
+    assert.equal((await request('/api/admin/session')).status,401); // revoked cookie stays revoked after restart
     for(const path of ['/','/admin','/index.html','/images/record-hero.webp']) assert.equal((await request(path)).status,404);
     assert.deepEqual(await (await request('/api/health')).json(),{ok:true});
     assert.equal((await request('/api/catalog')).status,200);
@@ -118,5 +137,14 @@ test('admin authorization, release states, import, and restart persistence', asy
     assert.match(response.headers.get('set-cookie'),/; Secure/);
     assert.match(response.headers.get('set-cookie'),/HttpOnly/);
     assert.equal(response.headers.get('cache-control'),'no-store');
+    cookie=response.headers.get('set-cookie').split(';')[0];csrf=(await response.json()).csrf;
   });
+  await stop();await boot({ADMIN_PASSWORD:'replacement-admin-password'});
+  await t.test('changing the admin password revokes old persistent credentials',async()=>{
+    assert.equal((await request('/api/admin/session')).status,401);
+    const response=await request('/api/admin/login',{method:'POST',body:JSON.stringify({password:'replacement-admin-password'})});
+    assert.equal(response.status,200);
+  });
+  await stop();await boot();
+  assert.equal((await request('/api/admin/session')).status,401); // restoring an old password cannot revive old cookies
 });
