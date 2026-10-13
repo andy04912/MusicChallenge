@@ -442,7 +442,7 @@ html[data-theme="dark"] .theme-toggle .moon-icon {
   animation: record-spin 3s linear infinite;
   animation-play-state: paused;
 }
-.is-playing .vinyl-record {
+.turntable.is-playing .vinyl-record {
   animation-play-state: running;
 }
 .disc-label {
@@ -517,7 +517,7 @@ html[data-theme="dark"] .theme-toggle .moon-icon {
   border-radius: 3px;
   background: #232321;
 }
-.is-playing .tonearm {
+.turntable.is-playing .tonearm {
   transform: rotate(17deg);
 }
 .playback {

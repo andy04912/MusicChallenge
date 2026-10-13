@@ -4,7 +4,7 @@ import {
   filterPool,
   searchSongs,
   isCorrectGuess,
-  pointsForTime,
+  stagesForDuration,
   matchesDecade,
 } from "../src/lib/game-logic.js";
 const songs = [
@@ -33,11 +33,31 @@ const songs = [
   },
 ];
 test("decades include their exact boundaries and intersect language and voice", () => {
-  const rows = ["1999", "2000", "2009", "2010", "2019", "2020", "2029", "2030", "", null, "2004x"]
-    .map((year, id) => ({ id, year, region: "tw", category: "boy" }));
-  assert.deepEqual(filterPool(rows, "tw", "boy", "2000s").map(s => s.year), ["2000", "2009"]);
-  assert.deepEqual(filterPool(rows, "tw", "boy", "2010s").map(s => s.year), ["2010", "2019"]);
-  assert.deepEqual(filterPool(rows, "tw", "boy", "2020s").map(s => s.year), ["2020", "2029"]);
+  const rows = [
+    "1999",
+    "2000",
+    "2009",
+    "2010",
+    "2019",
+    "2020",
+    "2029",
+    "2030",
+    "",
+    null,
+    "2004x",
+  ].map((year, id) => ({ id, year, region: "tw", category: "boy" }));
+  assert.deepEqual(
+    filterPool(rows, "tw", "boy", "2000s").map((s) => s.year),
+    ["2000", "2009"],
+  );
+  assert.deepEqual(
+    filterPool(rows, "tw", "boy", "2010s").map((s) => s.year),
+    ["2010", "2019"],
+  );
+  assert.deepEqual(
+    filterPool(rows, "tw", "boy", "2020s").map((s) => s.year),
+    ["2020", "2029"],
+  );
   assert.equal(filterPool(rows, "kr", "boy", "2000s").length, 0);
   assert.equal(filterPool(rows, "tw", "girl", "2000s").length, 0);
   assert.equal(filterPool(rows, "tw", "boy").length, rows.length);
@@ -58,7 +78,10 @@ test("region and artist-type filters intersect without including unclassified so
   assert.equal(filterPool(songs).length, 2);
   assert.deepEqual(filterPool(songs, "all"), []);
   assert.deepEqual(filterPool(songs, "other"), []);
-  assert.deepEqual(filterPool([{...songs[2], categoryReview: 1}], "kr", "all"), []);
+  assert.deepEqual(
+    filterPool([{ ...songs[2], categoryReview: 1 }], "kr", "all"),
+    [],
+  );
 });
 test("autocomplete searches artist, title and combined text; deduplicates album versions", () => {
   assert.equal(searchSongs(songs, "周杰倫").length, 2);
@@ -81,25 +104,27 @@ test("selected songs accept another album version but reject a different artist 
   assert.equal(isCorrectGuess(songs[0], songs[4].title, songs[4]), false);
 });
 
-test("speed scoring includes exact boundaries, rejects invalid time and retains late-answer points", () => {
-  for (const [ms, points] of [
-    [0, 1000],
-    [1000, 1000],
-    [1001, 800],
-    [3000, 800],
-    [3001, 600],
-    [5000, 600],
-    [5001, 400],
-    [10000, 400],
-    [10001, 200],
-    [20000, 200],
-    [20001, 100],
-    [60000, 100],
-    [-1, 0],
-    [NaN, 0],
-    [Infinity, 0],
-    [null, 0],
-  ]) {
-    assert.equal(pointsForTime(ms), points, `elapsed ${ms}`);
-  }
+test("clip tiers preserve scores and stop at the actual preview length", () => {
+  assert.deepEqual(
+    stagesForDuration(30).map((x) => [x.seconds, x.points]),
+    [
+      [1, 1000],
+      [6, 800],
+      [12, 600],
+      [18, 400],
+      [24, 200],
+      [30, 100],
+    ],
+  );
+  assert.deepEqual(
+    stagesForDuration(8).map((x) => [x.seconds, x.points]),
+    [
+      [1, 1000],
+      [6, 800],
+      [8, 600],
+    ],
+  );
+  assert.deepEqual(stagesForDuration(0.5), [{ seconds: 0.5, points: 1000 }]);
+  assert.equal(stagesForDuration(90).at(-1).seconds, 90);
+  assert.equal(stagesForDuration(NaN).at(-1).seconds, 30);
 });

@@ -1,32 +1,48 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightIcon } from "@phosphor-icons/react";
+import {
+  ArrowRightIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+} from "@phosphor-icons/react";
 import { normalize, searchSongs } from "../lib/game-logic.js";
 
-export default function GuessInput({ songs, onGuess, disabled = false }) {
+export default function GuessInput({
+  songs,
+  onGuess,
+  disabled = false,
+  disabledPlaceholder = "先播放，再猜歌",
+}) {
   const [text, setText] = useState(""),
     [selected, setSelected] = useState(null),
     [open, setOpen] = useState(false),
-    [active, setActive] = useState(-1);
+    [active, setActive] = useState(-1),
+    [page, setPage] = useState(0);
   const composing = useRef(false),
-    input = useRef(null),
-    list = useRef(null);
+    input = useRef(null);
   const suggestions = useMemo(() => searchSongs(songs, text), [songs, text]);
-  const expanded = open && suggestions.length > 0;
+  const pageSize = 2;
+  const expanded = !disabled && open && suggestions.length > 0;
+  const pages = Math.ceil(suggestions.length / pageSize);
   useEffect(() => {
-    if (expanded && active >= 0)
-      list.current?.children[active]?.scrollIntoView({ block: "nearest" });
-  }, [active, expanded]);
+    if (
+      !disabled &&
+      !window.matchMedia("(pointer: coarse)").matches &&
+      window.innerWidth > 767
+    )
+      input.current?.focus({ preventScroll: true });
+  }, [disabled]);
   function choose(song) {
     setText(song.title);
     setSelected(song);
     setOpen(false);
     setActive(-1);
-    input.current.focus();
+    input.current.focus({ preventScroll: true });
   }
   function change(value) {
     setText(value);
     setSelected(null);
     setActive(-1);
+    setPage(0);
     setOpen(!composing.current);
   }
   function keyDown(event) {
@@ -43,41 +59,37 @@ export default function GuessInput({ songs, onGuess, disabled = false }) {
     } else if (["ArrowDown", "ArrowUp"].includes(event.key)) {
       event.preventDefault();
       if (!suggestions.length) return;
-      setOpen(true);
-      setActive((previous) =>
+      const index =
         event.key === "ArrowDown"
-          ? (previous + 1) % suggestions.length
-          : previous <= 0
+          ? (active + 1) % suggestions.length
+          : active <= 0
             ? suggestions.length - 1
-            : previous - 1,
-      );
+            : active - 1;
+      setOpen(true);
+      setActive(index);
+      setPage(Math.floor(index / pageSize));
     } else if (event.key === "Enter" && expanded && active >= 0) {
       event.preventDefault();
       choose(suggestions[active]);
     }
   }
-  const status = selected
-    ? `已選：${selected.title} · ${selected.artist}，按「送出答案」確認。`
-    : !text.trim()
-      ? ""
-      : suggestions.length
-        ? `顯示 ${suggestions.length} 首建議${suggestions.length === 8 ? "，可繼續輸入縮小範圍" : ""}。`
-        : "目前分類沒有符合的建議；你仍可直接輸入完整歌名作答。";
   return (
     <form
       id="guess-form"
-      className="guess-form"
+      className="guess-form compact-guess"
       autoComplete="off"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!disabled && !composing.current && normalize(text))
+        if (!disabled && !composing.current && normalize(text)) {
+          setOpen(false);
           onGuess({ text, song: selected });
+        }
       }}
     >
-      <label htmlFor="guess-input" className="field-label">
+      <label htmlFor="guess-input" className="sr-only">
         你的答案
       </label>
-      <div className="autocomplete">
+      <div className="answer-entry">
         <input
           ref={input}
           disabled={disabled}
@@ -93,17 +105,20 @@ export default function GuessInput({ songs, onGuess, disabled = false }) {
             expanded && active >= 0 ? `suggestion-${active}` : undefined
           }
           aria-describedby="guess-help guess-status"
-          placeholder={disabled ? "按播放開始" : "輸入歌名或歌手…"}
+          placeholder={disabled ? disabledPlaceholder : "輸入歌名或歌手…"}
           maxLength={200}
           spellCheck={false}
           autoComplete="off"
+          enterKeyHint="send"
           onKeyDown={keyDown}
           onFocus={() => {
             if (!selected) setOpen(true);
           }}
-          onBlur={() => {
-            setOpen(false);
-            setActive(-1);
+          onBlur={(event) => {
+            if (!event.relatedTarget?.closest?.(".compact-guess")) {
+              setOpen(false);
+              setActive(-1);
+            }
           }}
           onCompositionStart={() => {
             composing.current = true;
@@ -114,44 +129,82 @@ export default function GuessInput({ songs, onGuess, disabled = false }) {
             change(event.currentTarget.value);
           }}
         />
-        <div
-          ref={list}
-          id="guess-suggestions"
-          role="listbox"
-          aria-label="歌曲建議"
-          hidden={!expanded}
+        <button
+          type="submit"
+          className="answer-submit"
+          id="submit-guess"
+          aria-label="送出答案"
+          disabled={disabled || !normalize(text)}
         >
-          {suggestions.map((song, index) => (
-            <div
-              key={song.id}
-              id={`suggestion-${index}`}
-              className="song-suggestion"
-              role="option"
-              aria-label={`${song.title} ${song.artist}`}
-              aria-selected={index === active}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => choose(song)}
-            >
-              <strong>{song.title}</strong>
-              <span>{song.artist}</span>
-            </div>
-          ))}
+          <ArrowRightIcon aria-hidden="true" />
+          <span>送出</span>
+        </button>
+      </div>
+      <div className="suggestions-panel" hidden={!expanded}>
+        <div id="guess-suggestions" role="listbox" aria-label="歌曲建議">
+          {suggestions
+            .slice(page * pageSize, (page + 1) * pageSize)
+            .map((song, local) => {
+              const index = page * pageSize + local;
+              return (
+                <div
+                  key={song.id}
+                  id={`suggestion-${index}`}
+                  className="song-suggestion"
+                  role="option"
+                  aria-label={`${song.title} ${song.artist}`}
+                  aria-selected={index === active}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => choose(song)}
+                >
+                  <strong>{song.title}</strong>
+                  <span>{song.artist}</span>
+                </div>
+              );
+            })}
         </div>
+        {pages > 1 && (
+          <div className="suggestion-pages">
+            <button
+              type="button"
+              aria-label="上一頁歌曲建議"
+              disabled={page === 0}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setPage(page - 1);
+                setActive(-1);
+              }}
+            >
+              <CaretLeftIcon />
+            </button>
+            <span>
+              {page + 1} / {pages} · 繼續輸入可縮小範圍
+            </span>
+            <button
+              type="button"
+              aria-label="下一頁歌曲建議"
+              disabled={page >= pages - 1}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setPage(page + 1);
+                setActive(-1);
+              }}
+            >
+              <CaretRightIcon />
+            </button>
+          </div>
+        )}
       </div>
       <p id="guess-help" className="sr-only">
-        可直接輸入完整歌名送出，或從建議選歌。↑ ↓ 選擇，Enter 確認。
+        直接輸入完整歌名，或用歌手搜尋。上下鍵選歌、Enter 選取，再送出答案。
       </p>
-      <p id="guess-status" className="guess-status sr-only" role="status">
-        {status}
+      <p id="guess-status" className="sr-only" role="status">
+        {selected
+          ? `已選 ${selected.title}，按送出答案確認。`
+          : expanded
+            ? `共 ${suggestions.length} 首建議，第 ${page + 1} 頁。`
+            : ""}
       </p>
-      <button
-        type="submit"
-        className="primary"
-        id="submit-guess"
-        disabled={disabled || !normalize(text)}
-      >
-        送出答案 <ArrowRightIcon aria-hidden="true" />
-      </button>
     </form>
   );
 }

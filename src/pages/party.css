@@ -1,0 +1,916 @@
+.party-page {
+  height: 100%;
+  min-height: 0;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-block: 18px;
+  overflow: hidden;
+}
+.party-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.party-header > div {
+  flex: 1;
+  min-width: 0;
+}
+.party-header p {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--pink);
+  margin: 0 0 5px;
+  font-weight: 700;
+}
+.party-header h1 {
+  font-size: 25px;
+  line-height: 1.2;
+  margin: 0;
+}
+.party-end {
+  min-height: 44px;
+  border: 1px solid var(--pink);
+  border-radius: 9px;
+  background: var(--soft-accent);
+  color: var(--pink);
+  padding: 8px 16px;
+  font-weight: 700;
+}
+.party-page .primary {
+  min-height: 46px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.party-setup {
+  width: min(100%, 470px);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+.party-setup > p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.party-setup h2 {
+  margin: 0;
+  font-size: 23px;
+}
+.party-setup-icon {
+  font-size: 64px;
+  color: var(--pink);
+}
+.party-setup label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.party-setup input,
+.party-setup select,
+.party-origin select {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+}
+.party-setting-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.party-decade {
+  grid-column: 1/-1;
+}
+.party-center {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+}
+.party-center > svg {
+  font-size: 56px;
+  color: var(--pink);
+}
+.party-center h2 {
+  font-size: 22px;
+  margin: 0;
+}
+.party-center p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  color: var(--muted);
+}
+.party-host-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 44px;
+  align-items: center;
+}
+.party-host-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+}
+.party-host-side {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.party-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.party-audio .turntable {
+  width: min(100%, 270px);
+  margin-inline: auto;
+}
+.party-play-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.party-play {
+  width: 92px;
+  height: 92px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pink);
+  color: var(--button-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.party-play svg {
+  font-size: 27px;
+}
+.party-play-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.party-play-row strong {
+  font-size: 18px;
+}
+.party-play-row p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 6px 0 12px;
+}
+.party-play-row progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  accent-color: var(--pink);
+}
+.party-audio-credit {
+  font-size: 9px;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+.party-host-controls > p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+.party-host-controls button {
+  width: 100%;
+}
+.party-lobby-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.party-lobby-tabs button {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+}
+.party-lobby-tabs button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.party-invitation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.party-qr {
+  display: grid;
+  place-items: center;
+  width: 180px;
+  height: 180px;
+  border: 8px solid #fffefa;
+  background: #fffefa;
+  border-radius: 14px;
+}
+.party-qr img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.party-qr > svg {
+  font-size: 60px;
+  color: #202024;
+}
+.party-invitation h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.party-invitation > p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+  text-align: center;
+}
+.party-invite-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border-bottom: 1px solid var(--line);
+}
+.party-invite-link input {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 8px 0;
+}
+.party-invite-link button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--pink);
+  font-size: 22px;
+}
+.party-origin {
+  width: 100%;
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.party-origin select {
+  font-size: 14px;
+}
+.party-network-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+}
+.party-participants {
+  min-height: 0;
+}
+.party-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.party-list-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.party-list-heading > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.party-participants ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.party-participants li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.party-place {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 700;
+}
+.party-place.is-correct {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: var(--button-ink);
+}
+.party-participants li > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+.party-participants strong {
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.party-participants small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.party-participants b {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+}
+.party-pages {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  margin-top: 6px;
+}
+.party-pages button {
+  min-width: 44px;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+.party-pages span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.party-empty {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  padding: 30px 0;
+  line-height: 1.6;
+}
+.party-mobile-game {
+  width: min(100%, 520px);
+  flex: 1;
+  min-height: 0;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: center;
+}
+.party-your-score {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+  gap: 12px;
+}
+.party-your-score > span {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.party-your-score strong {
+  font-size: 35px;
+  font-family: "Barlow Condensed", sans-serif;
+  line-height: 1;
+}
+.party-your-score small {
+  font-size: 12px;
+  font-family: Arial, sans-serif;
+  font-weight: 400;
+}
+.party-player-answer {
+  min-height: 0;
+}
+.party-player-answer h2 {
+  font-size: 24px;
+  margin: 0 0 8px;
+}
+.party-player-answer > p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.party-player-answer .guess-form {
+  margin: 8px 0 0;
+}
+.party-giveup {
+  display: block;
+  min-height: 40px;
+  margin-inline: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 8px 12px;
+}
+.party-answer-status {
+  text-align: center;
+  padding: 14px 0;
+}
+.party-answer-status svg {
+  font-size: 37px;
+  color: var(--pink);
+  margin-bottom: 10px;
+}
+.party-answer-status h2 {
+  margin: 0 0 8px;
+  font-size: 23px;
+}
+.party-answer-status strong {
+  font-size: 37px;
+  color: var(--pink);
+  font-family: "Barlow Condensed", sans-serif;
+}
+.party-answer-status p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 8px 0;
+}
+.party-answer-song {
+  text-align: center;
+}
+.party-answer-song span {
+  font-size: 12px;
+  color: var(--pink);
+  font-weight: 700;
+}
+.party-answer-song h2 {
+  font-size: 23px;
+  line-height: 1.3;
+  margin: 7px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.party-answer-song p {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+}
+.party-answer-song a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  font-size: 12px;
+}
+.party-answer-song small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.party-error {
+  font-size: 12px;
+  color: var(--pink);
+  margin: 0;
+  line-height: 1.5;
+}
+.party-error button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--line);
+  padding: 8px;
+  min-height: 38px;
+  margin-left: 8px;
+  border-radius: 6px;
+}
+.party-finished {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 12px;
+}
+.party-finished > .party-podium {
+  flex: 1;
+  min-height: 0;
+}
+.party-end-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(
+    430px,
+    calc(100vw - 40px - env(safe-area-inset-left) - env(safe-area-inset-right))
+  );
+  max-height: calc(
+    100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
+  margin: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 20px 80px #0005;
+}
+.party-end-dialog:not([open]) {
+  display: none;
+}
+.party-end-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.party-end-dialog::backdrop {
+  background: #17131bc2;
+  backdrop-filter: blur(5px);
+}
+.party-end-dialog > span {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--pink);
+  font-weight: 700;
+}
+.party-end-dialog h2 {
+  font-size: 22px;
+  margin: 0;
+}
+.party-end-dialog p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+.party-end-dialog > div {
+  display: flex;
+  gap: 10px;
+}
+.party-end-dialog button {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+}
+.party-end-dialog button.primary {
+  background: var(--pink);
+  color: var(--button-ink);
+}
+@media (max-width: 680px) {
+  .party-revealed .party-audio .turntable {
+    display: none;
+  }
+  .party-page {
+    padding-block: 8px;
+    gap: 8px;
+  }
+  .party-header h1 {
+    font-size: 19px;
+  }
+  .party-header p {
+    font-size: 9px;
+  }
+  .party-header {
+    gap: 8px;
+  }
+  .party-setup {
+    gap: 12px;
+  }
+  .party-setup-icon {
+    font-size: 42px;
+  }
+  .party-setup > p {
+    font-size: 12px;
+  }
+  .party-host-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .party-host-stage {
+    gap: 8px;
+  }
+  .party-audio {
+    gap: 8px;
+  }
+  .party-audio .turntable {
+    width: 90px;
+  }
+  .party-audio .deck-brand {
+    font-size: 7px;
+  }
+  .party-audio .deck-status {
+    display: none;
+  }
+  .party-play {
+    width: 68px;
+    height: 68px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  .party-play svg {
+    font-size: 23px;
+  }
+  .party-play-row {
+    gap: 12px;
+  }
+  .party-play-row strong {
+    font-size: 16px;
+  }
+  .party-play-row p {
+    margin: 4px 0 8px;
+    font-size: 11px;
+  }
+  .party-qr {
+    width: 120px;
+    height: 120px;
+    border-width: 5px;
+  }
+  .party-invitation {
+    gap: 6px;
+  }
+  .party-invitation h2 {
+    font-size: 17px;
+  }
+  .party-invitation > p {
+    font-size: 10px;
+  }
+  .party-host-side {
+    gap: 8px;
+  }
+  .party-invitation .party-network-note {
+    font-size: 9px;
+  }
+  .party-origin {
+    gap: 3px;
+  }
+  .party-origin select {
+    font-size: 16px;
+    min-height: 40px;
+    padding: 5px 8px;
+  }
+  .party-invite-link input {
+    font-size: 16px;
+  }
+  .party-lobby-tabs button {
+    min-height: 40px;
+    font-size: 12px;
+  }
+  .party-list-heading {
+    margin-bottom: 6px;
+  }
+  .party-list-heading h2 {
+    font-size: 16px;
+  }
+  .party-participants li {
+    padding: 7px 0;
+    gap: 8px;
+  }
+  .party-participants strong {
+    font-size: 13px;
+  }
+  .party-participants small {
+    font-size: 10px;
+  }
+  .party-participants b {
+    font-size: 21px;
+  }
+  .party-place {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+  .party-mobile-game {
+    gap: 12px;
+  }
+  .party-player-answer h2 {
+    font-size: 22px;
+  }
+  .party-await {
+    flex: 0;
+    padding: 14px 0;
+  }
+  .party-await > svg {
+    font-size: 40px;
+  }
+  .party-center h2 {
+    font-size: 19px;
+  }
+  .party-center p {
+    font-size: 12px;
+  }
+  .party-answer-status {
+    padding: 5px 0;
+  }
+  .party-answer-status h2 {
+    font-size: 21px;
+  }
+  .party-finished {
+    gap: 7px;
+  }
+}
+@media (max-height: 700px) and (max-width: 680px) {
+  .party-page {
+    padding-block: 3px;
+    gap: 5px;
+  }
+  .party-header p,
+  .party-setup-icon,
+  .party-audio .turntable,
+  .party-await > svg {
+    display: none;
+  }
+  .party-mobile-game {
+    gap: 7px;
+  }
+  .party-your-score {
+    padding-bottom: 5px;
+  }
+  .party-your-score strong {
+    font-size: 29px;
+  }
+  .party-participants li {
+    padding: 5px 0;
+  }
+  .party-list-heading {
+    margin-bottom: 4px;
+  }
+  .party-participants small {
+    display: none;
+  }
+  .party-host-layout {
+    gap: 8px;
+  }
+  .party-qr {
+    width: 90px;
+    height: 90px;
+  }
+  .party-invitation h2 {
+    display: none;
+  }
+  .party-audio-credit {
+    font-size: 8px;
+  }
+  .party-setup {
+    gap: 9px;
+  }
+  .party-setup > p {
+    font-size: 11px;
+  }
+  .party-answer-status svg {
+    display: none;
+  }
+  .party-answer-status p {
+    margin: 4px 0;
+  }
+  .party-answer-song h2 {
+    font-size: 20px;
+  }
+  .party-setup label {
+    gap: 4px;
+  }
+  .party-setting-grid {
+    gap: 8px;
+  }
+  .party-host-controls > p {
+    font-size: 10px;
+  }
+}
+@media (max-height: 520px) and (min-width: 681px) {
+  .party-page {
+    padding-block: 4px;
+    gap: 5px;
+  }
+  .party-header p,
+  .party-audio .turntable,
+  .party-setup-icon {
+    display: none;
+  }
+  .party-setup {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 15px;
+    width: 100%;
+    max-width: 700px;
+  }
+  .party-setup > p {
+    grid-column: 1/-1;
+    font-size: 12px;
+  }
+  .party-setting-grid {
+    grid-row: 2/4;
+    grid-column: 2;
+  }
+  .party-setup > .primary {
+    grid-column: 1;
+  }
+  .party-qr {
+    width: 100px;
+    height: 100px;
+  }
+  .party-invitation {
+    gap: 4px;
+  }
+  .party-invitation h2,
+  .party-invitation > .party-network-note {
+    display: none;
+  }
+  .party-host-side {
+    gap: 6px;
+  }
+  .party-host-stage {
+    gap: 8px;
+  }
+  .party-participants li {
+    padding: 6px 0;
+  }
+  .party-mobile-game {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 20px;
+    width: 100%;
+    max-width: 850px;
+  }
+  .party-your-score {
+    grid-column: 1;
+  }
+  .party-mobile-game > .party-participants {
+    grid-column: 2;
+    grid-row: 1/3;
+  }
+  .party-mobile-game > .party-await,
+  .party-mobile-game > .party-player-answer,
+  .party-mobile-game > .party-answer-song {
+    grid-column: 1;
+  }
+  .party-answer-status svg {
+    display: none;
+  }
+}
+.app-shell[data-keyboard="open"] .party-mobile-game > .party-participants,
+.app-shell[data-keyboard="open"] .party-setup-icon,
+.app-shell[data-keyboard="open"] .party-setup > p,
+.app-shell[data-keyboard="open"] .party-setting-grid {
+  display: none;
+}
+.app-shell[data-keyboard="open"] .party-mobile-game {
+  justify-content: center;
+}
+.app-shell[data-keyboard="open"] .party-header p {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .party-page * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

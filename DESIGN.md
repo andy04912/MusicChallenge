@@ -48,3 +48,57 @@ AppShell 共用頁首、導覽、內容區、頁尾及玩法 dialog。管理後�
 ## Docker 前後端分離
 
 原單一 Dockerfile 改為 Dockerfile.frontend 與 Dockerfile.backend；Compose 只公開 Nginx，Node API 透過內網存取，SQLite 保存於 named volume。本次已啟動 Docker Engine，兩個映像建置成功、健康檢查通過。實測靜態路由、404、CSP、API 代理、Origin／CSRF／登入登出，以及重建 backend 後 SQLite 狀態持續存在與 Nginx DNS 重新解析；測試用歌曲狀態已復原。22 項 Node 測試通過（新增 API-only 正式 cookie／origin 測試）。未部署至 Zeabur。
+
+
+## 2026-10-13 App-shell 與循環片段
+
+設計判讀：給華語與 K-POP 樂迷的輕量音樂 App，沿用粉紅 #c6275d 與唱片品牌。保留 React + 原生 CSS；DESIGN_VARIANCE 5、MOTION_INTENSITY 4、VISUAL_DENSITY 4。design-taste 技能只套用首頁的字體、色彩與精簡原則，遊戲和後台依產品操作需求安排。
+
+原首頁為照片加選曲表單，下方有說明列與歌手列表；這次依使用者要求移除照片，以共用 Turntable 取代，收斂為單一選曲入口。固定頂部品牌列、桌機側邊導覽／手機底部導覽、獨立內容捲動與來源頁尾。保留原 wordmark、路徑、後台操作與發布狀態。6px 控制項與14px唱盤，明暗模式使用原有語意色彩。
+
+首頁唱片持續旋轉；遊戲唱片跟隨音訊狀態。使用者減少動態時停用旋轉。取消秒錶，改顯示解鎖長度、固定可得分數及各級距。進度條只讀，不提供拖曳；播放控制始終位於唱盤下方。答錯會提示並清空輸入，焦點回到輸入框；最後一段答錯才揭曉。
+
+## Music Challenge 品牌更新
+
+品牌名稱統一為 Music Challenge。標誌採原創 SVG：有同心溝槽的黑膠直接構成搶答鈴底座，粉紅色鈴身、頂部按鈕與兩側聲響線代表搶答挑戰。米白底保持明暗模式的辨識度；不增加標誌本身的動畫，唱片仍沿用旋轉動態。沿用原有設計密度與粉紅色系。
+
+單一標誌來源為 `public/images/music-challenge-mark.svg`，由 BrandMark 共用於前後台品牌列、唱片標籤，亦用作 favicon。品牌列搭配文字 Music Challenge 及 LISTEN. GUESS. WIN.；螢幕閱讀器以連結名稱讀出品牌，避免重複朗讀裝飾圖案。手機保留底部導覽，隱藏重複的「查看前台」連結，避免長品牌名擠壓。
+
+## 手機優先與安全區
+
+後續設計以手機使用性優先。viewport 開啟 viewport-fit=cover，App shell 在固定導覽格線之外一次保留四邊 env(safe-area-inset-*)，避免底部 padding 擠壓導覽按鈕；說明 dialog 亦保留四邊安全區。小螢幕橫向使用手機導覽。首頁唱盤與標題並排、年代固定兩欄，手機互動控制至少 44px 高，輸入欄位維持 16px，允許使用者縮放。
+
+粗略指標裝置播放後不主動聚焦輸入。Android 使用 interactive-widget=resizes-content，Safari 以 VisualViewport 處理鍵盤縮小可視區：輸入中才判斷鍵盤、縮放時不誤判、關閉時還原。鍵盤開啟時暫時隱藏底部導覽與頁尾，候選清單限高、送出按鈕靠近可視底部。後台預覽改在內容捲動區內定位。
+
+驗證：390×844 模擬頂部59px／底部34px；844×390 模擬左右59px／底部21px；另檢查窄版320px。VisualViewport 測試涵蓋 iOS 型可視區縮小、Android 型版面縮小、轉向、失焦、鍵盤關閉及捏合縮放。模擬不等同實體 iOS Safari 驗證。
+
+實作參考：[WebKit safe area](https://webkit.org/blog/7929/designing-websites-for-iphone-x/)、[MDN VisualViewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)。
+
+
+## 手機遊戲流程、無限挑戰與好友房更新
+
+品牌維持 Music Challenge 的粉紅唱盤與黑膠搶答鈴。玩家導覽改為猜歌、好友對戰、排行榜及玩法；歌曲管理只保留獨立 `/admin`。手機設定採分步、候選歌曲與成績採分頁，搭配 safe area、固定可視高度與鍵盤狀態收合，主要遊戲流程不依賴整頁捲動。輸入維持 16px 並依本次需求設定縮放限制；實體瀏覽器仍可能自行覆寫 viewport 限制。
+
+片段秒數與答對分數整合在播放器附近，放大單次播放按鈕，延長片段置於相鄰位置；每次到解鎖上限即停止，由使用者自行重播。答案與送出整合一列，直接揭曉縮為次要操作。玩法改成有唱片視覺的分步說明，得分與回合轉場使用短動畫並尊重 prefers-reduced-motion。
+
+新增經典／無限單人、分頁排行榜與兩人邀請房。房間同題、各自作答，雙方完成才揭曉；分數先呈現本題，再轉為累積；雙方準備才開下一題。判分、去重曲序、累積與房間狀態由 Node／SQLite 保存，SSE 同步畫面。贊助入口為頁尾右側淡粉色 Donate Me! 按鈕，另開指定的 Portaly 贊助頁。
+
+後端驗證包含 44 項測試：訪客身分隔離、SSE 與重新連線、雙方完成／準備屏障、分數不提前洩漏、重複操作、無限歷史裁減後仍保留完整累積。此紀錄描述本次實作，不代表已部署至正式環境；先前 Lighthouse 與手機量測仍屬各自版本的歷史紀錄。
+
+### Mobile play refinements — 2026-10-13
+
+Play mode hides shared app navigation and exposes the rules through a question icon below the solo score. The record scales with available viewport height instead of the earlier 80px cap; compact screens retain all actions without page scrolling. Revealed title/artist sit directly under playback, with Apple Music and next-song actions side by side. Nicknames persist locally while typing. Entering each song preloads and silently decodes its preview; explicit play still controls sound and scoring. Source attribution remains a small single line.
+
+### Duel exit and mobile score placement — 2026-10-14
+
+Removed the duel header home/back link. Explicit leaving uses a native modal with cancel, confirmation, and in-dialog retry feedback. Persisted room closure records the departing member; SSE tells the other player who left and removes playback. Connection interruption remains reconnectable. Mobile solo totals and duel player totals now sit above the record, while the top-right help entry remains available. Verified two-player cancel/confirm/remote-close flow and 320px layout.
+
+### 對戰結算與內容層次 — 2026-10-14
+
+好友對戰採結束／準備雙操作，左側結束、右側準備。主動結束後直接結算，對方先確認具名通知再查看成績。保留已完成作答的得分，結算不再揭露未完成歌曲。手機導覽字級為 13px、字重 600，維持原有安全區與固定高度；玩家內容區使用淡玫瑰灰 #f0e7e9，深色模式使用 #211a20，與導覽及操作面板拉開層次。
+
+### 派對模式 — 2026-10-14
+
+導覽新增「派對」。主控以唱盤播放器搭配 QR Code／即時答對榜，參賽者手機只提供作答與分數；遊玩時收起導覽，保留問號玩法。全曲試聽由主控明確點擊開始，播放按鈕不採分段、不自動循環。每題名次即時更新，答錯可重試，所有人完成或主控揭曉後才換題。
+
+頒獎台以第二、第一、第三名呈現高低，使用銀灰、品牌粉紅與銅色區分；所有參賽者以橫列分頁保持固定視窗，煙火僅短暫播放並尊重減少動態效果設定。分享頁沿用互動頒獎台，PNG 使用同一排名資料。已驗證 320 × 568 分享頁無頁面溢出、桌面三人頒獎、手機答錯重試／即時名次，以及實際 PNG 下載。手機尺寸使用瀏覽器模擬，尚未在實體 iPhone 測試。

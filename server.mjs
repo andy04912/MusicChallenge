@@ -7,6 +7,7 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypt
 import { createCharts } from './charts.mjs';
 import { classifySong, manualCategory, excludedVersionReason } from './classify.mjs';
 import { gzipSync } from 'node:zlib';
+import { createGameplayHandler } from './game-service.mjs';
 
 const base = fileURLToPath(new URL('.', import.meta.url));
 const password = process.env.ADMIN_PASSWORD || '';
@@ -132,13 +133,14 @@ function fromApple(song, category = 'other', region = 'other') {
   return { ...row, ...classifySong(row) };
 }
 const getChart = createCharts({ lookup: async ids => (await apple('/lookup', { id: ids.join(','), limit: '200' })).map(song => fromApple(song)).filter(Boolean) });
+const gameplay = createGameplayHandler({ db, body, json, sameOrigin, production, getPublishedSongs: () => db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all().filter(song => !excludedVersionReason(song)) });
 const serveStatic = process.env.SERVE_STATIC !== 'false';
 const staticFiles = new Map(serveStatic ? [
-  ['/', 'index.html'], ['/index.html', 'index.html'], ['/admin', 'index.html'], ['/admin/', 'index.html']
+  ['/', 'index.html'], ['/index.html', 'index.html'], ['/admin', 'index.html'], ['/admin/', 'index.html'], ['/leaderboard', 'index.html'], ['/duel', 'index.html'], ['/party', 'index.html']
 ] : []);
 const distDir = resolve(base, 'dist');
 // Serve only generated assets, never project source, secrets or SQLite files.
-for (const folder of serveStatic ? ['assets', 'images'] : []) {
+for (const folder of serveStatic ? ['assets', 'images', 'icons'] : []) {
   try {
     for (const entry of await readdir(resolve(distDir, folder), { recursive: true, withFileTypes: true })) {
       if (!entry.isFile()) continue;
@@ -147,16 +149,21 @@ for (const folder of serveStatic ? ['assets', 'images'] : []) {
     }
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.webp': 'image/webp', '.png': 'image/png', '.svg': 'image/svg+xml' };
+if (serveStatic) {
+  const publicEntries = await readdir(distDir).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
+  for (const filename of ['manifest.webmanifest', 'sw.js', 'offline.html', 'offline.css']) if (publicEntries.includes(filename)) staticFiles.set(`/${filename}`, filename);
+}
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.webmanifest': 'application/manifest+json; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.webp': 'image/webp', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.mzstatic.com; media-src https://*.mzstatic.com https://*.itunes.apple.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.mzstatic.com; media-src https://*.mzstatic.com https://*.itunes.apple.com; connect-src 'self' https://*.mzstatic.com https://*.itunes.apple.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   if (production) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   try {
     const url = new URL(req.url, 'http://localhost'), path = url.pathname, method = req.method;
     if (method === 'GET' && path === '/api/health') return json(res, 200, { ok: true });
+    if (await gameplay.handle(req, res, url)) return;
     if (method === 'GET' && path === '/api/catalog') return json(res, 200, db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all().filter(song => !excludedVersionReason(song)));
     if (path === '/api/admin/login' && method === 'POST') {
       sameOrigin(req);
@@ -249,8 +256,8 @@ const server = createServer(async (req, res) => {
       }
       throw fail(404, '找不到這個功能。');
     }
-    if ((method === 'GET' || method === 'HEAD') && staticFiles.has(path)) {
-      const filename = staticFiles.get(path);
+    if ((method === 'GET' || method === 'HEAD') && (staticFiles.has(path) || (serveStatic && /^\/(?:duel\/[A-Za-z0-9_-]{6,32}|party\/P[A-Za-z0-9_-]{15}|result\/[A-Za-z0-9_-]{24})\/?$/.test(path)))) {
+      const filename = staticFiles.get(path) || 'index.html';
       let content = await readFile(resolve(base, 'dist', filename));
       const compressible = ['.html','.js','.css','.svg'].includes(extname(filename));
       if (compressible) {
@@ -268,4 +275,4 @@ const server = createServer(async (req, res) => {
   }
 });
 server.listen(Number(process.env.PORT || 8080), process.env.HOST || '0.0.0.0', () => console.log(`Local: http://127.0.0.1:${server.address().port}`));
-for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => { clearInterval(cleanup); server.close(() => { db.close(); process.exit(0); }); });
+for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => { clearInterval(cleanup); gameplay.close(); server.close(() => { db.close(); process.exit(0); }); });

@@ -9,10 +9,11 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.mjs",
     "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
-    "check": "node --check server.mjs && node --check charts.mjs && node --check classify.mjs && node --check scripts/dev.mjs && node --check src/lib/game-logic.js",
+    "check": "node --check server.mjs && node --check game-service.mjs && node --check party-service.mjs && node --check charts.mjs && node --check classify.mjs && node --check scripts/dev.mjs && node --check src/lib/game-logic.js",
     "test": "npm run test:server && npm run test:ui",
     "catalog": "python scripts/catalog.py",
-    "build": "node scripts/prepare-assets.mjs && vite build",
+    "build": "vite build && node scripts/build-pwa.mjs",
+    "icons": "node scripts/generate-app-icons.mjs",
     "test:server": "node --test test/*.test.mjs",
     "test:ui": "vitest run",
     "format": "prettier --write src scripts/*.mjs vite.config.js"
@@ -20,6 +21,7 @@
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0"

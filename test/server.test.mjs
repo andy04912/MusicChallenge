@@ -33,11 +33,24 @@ test('admin authorization, release states, import, and restart persistence', asy
   await t.test('React app shell and generated assets serve on both entry routes, with no source or API fallback',async()=>{
     const home=await request('/');const html=await home.text();
     assert.equal(home.status,200);assert.match(html,/<div id="root"><\/div>/);assert.doesNotMatch(html,/<section id="home"/);
-    for(const path of ['/admin','/admin/'])assert.equal(await (await request(path)).text(),html);
+    for(const path of ['/admin','/admin/','/party','/party/Pabcdefghijklmno','/result/Abcdefghijklmnopqrstuv_1'])assert.equal(await (await request(path)).text(),html);
+    assert.match(home.headers.get('content-security-policy'),/worker-src 'self'/);
+    assert.match(home.headers.get('content-security-policy'),/img-src 'self' data: blob:/);
     const asset=html.match(/src="(\/assets\/[^\"]+\.js)"/)[1];
     const js=await request(asset);assert.equal(js.status,200);assert.match(js.headers.get('content-type'),/javascript/);assert.match(js.headers.get('cache-control'),/immutable/);
     for(const path of ['/src/main.jsx','/package.json','/assets/missing.js','/api/missing'])assert.equal((await request(path)).status,404);
-    assert.equal((await request('/images/record-hero.webp')).status,200);
+    assert.equal((await request('/images/record-hero.webp')).status,404);
+  });
+  await t.test('PWA files have explicit MIME types, safe CSP and revalidation headers', async()=>{
+    const manifest=await request('/manifest.webmanifest');
+    assert.equal(manifest.status,200);assert.match(manifest.headers.get('content-type'),/application\/manifest\+json/);
+    const metadata=await manifest.json();assert.equal(metadata.name,'Music Challenge');assert.equal(metadata.scope,'/');
+    const worker=await request('/sw.js');assert.equal(worker.status,200);assert.match(worker.headers.get('content-type'),/application\/javascript/);assert.match(worker.headers.get('cache-control'),/no-cache/);
+    assert.match(worker.headers.get('content-security-policy'),/worker-src 'self'/);
+    const offline=await request('/offline.html');assert.equal(offline.status,200);assert.match(await offline.text(),/href="\/offline.css"/);
+    const css=await request('/offline.css');assert.equal(css.status,200);assert.match(css.headers.get('content-type'),/text\/css/);
+    for(const icon of metadata.icons){const response=await request(icon.src);assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/image\/png/);}
+    assert.equal((await request('/icons/missing.png')).status,404);
   });
   await t.test('drafts are seeded privately, never returned to anonymous visitors', async()=>{
     assert.deepEqual(await (await request('/api/catalog')).json(),[]);
