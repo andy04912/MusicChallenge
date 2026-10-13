@@ -44,6 +44,7 @@ test("region and artist-type filters intersect without including unclassified so
   assert.equal(filterPool(songs).length, 2);
   assert.deepEqual(filterPool(songs, "all"), []);
   assert.deepEqual(filterPool(songs, "other"), []);
+  assert.deepEqual(filterPool([{...songs[2], categoryReview: 1}], "kr", "all"), []);
 });
 test("autocomplete searches artist, title and combined text; deduplicates album versions", () => {
   assert.equal(searchSongs(songs, "周杰倫").length, 2);

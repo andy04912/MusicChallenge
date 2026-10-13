@@ -29,7 +29,11 @@ function Select({ label, value, onChange, options, className }) {
     </label>
   );
 }
-function SongRow({ song, discovery, checked, onSelect, onPreview }) {
+function SongRow({ song, discovery, checked, onSelect, onPreview, onCategory }) {
+  const classification = discovery && song.categoryOverride
+    ? song.categoryOverride
+    : song.categoryReview || !song.categorySource ? "pending" : song.category;
+  const label = classification === "pending" ? "待確認" : categoryLabels[classification];
   const unavailable = discovery && (song.imported || song.unavailable);
   return (
     <div
@@ -72,13 +76,23 @@ function SongRow({ song, discovery, checked, onSelect, onPreview }) {
         </span>
         {!discovery && (
           <>
-            <span className="category-tag">
-              {categoryLabels[song.category]}
-            </span>
             <span className="category-tag">{regionLabels[song.region]}</span>
           </>
         )}
       </div>
+      <label className="song-category" title={song.categoryOverride ? "本曲人工指定" : song.categoryReason}>
+        <span>{(song.categoryOverride || song.categorySource === "manual") ? "人工" : song.categorySource === "legacy" ? "既有" : "自動"} · {label}</span>
+        <select
+          aria-label={`演唱分類 ${song.title} · ${song.artist}`}
+          value={discovery ? song.categoryOverride || "auto" : classification}
+          disabled={discovery && (song.imported || song.unavailable)}
+          onChange={event => onCategory(song.id, event.target.value)}
+        >
+          <option value="auto">自動判斷</option>
+          {Object.entries(categoryLabels).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+          <option value="pending">待確認</option>
+        </select>
+      </label>
       <button
         className="row-preview"
         disabled={!!song.unavailable}
@@ -150,7 +164,6 @@ export default function AdminPage() {
     [appleQuery, setAppleQuery] = useState("");
   const [batchCategory, setBatchCategory] = useState("girl"),
     [batchRegion, setBatchRegion] = useState("tw"),
-    [importCategory, setImportCategory] = useState("girl"),
     [importRegion, setImportRegion] = useState("other"),
     [preview, setPreview] = useState(null);
   const csrf = useRef(""),
@@ -229,7 +242,7 @@ export default function AdminPage() {
       songs.filter(
         (song) =>
           (status === "all" || song.status === status) &&
-          (category === "all" || song.category === category) &&
+          (category === "all" || (category === "pending" ? song.categoryReview : !song.categoryReview && song.category === category)) &&
           (region === "all" || song.region === region) &&
           `${song.title} ${song.artist} ${song.album}`
             .toLowerCase()
@@ -254,11 +267,11 @@ export default function AdminPage() {
       return next;
     });
   }
-  async function patch(update, message) {
+  async function patch(update, message, ids = [...selected]) {
     await run(async () => {
       const result = await api("songs", {
         method: "PATCH",
-        body: JSON.stringify({ ids: [...selected], ...update }),
+        body: JSON.stringify({ ids, ...update }),
       });
       await refresh();
       setNotice({
@@ -295,7 +308,6 @@ export default function AdminPage() {
       setResults([]);
       setImportSelected(new Set());
       if (which !== "search") {
-        setImportCategory("other");
         await loadChart(which);
       } else setDiscoveryMessage("搜尋喜歡的歌手，開始擴充你的題庫。");
     });
@@ -415,7 +427,7 @@ export default function AdminPage() {
           </div>
           <p className="library-hint">
             只有「已開放」的歌曲會出現在前台。每個遊戲分類至少需要 5
-            首，才能開始一輪。
+            首，才能開始一輪。待確認歌曲需先確認演唱分類。
           </p>
           <div className="admin-tabs" role="tablist" aria-label="歌曲管理功能">
             {[
@@ -468,7 +480,7 @@ export default function AdminPage() {
                 label="分類"
                 value={category}
                 onChange={(v) => filter(setCategory, v)}
-                options={{ all: "所有分類", ...categoryLabels }}
+                options={{ all: "所有分類", ...categoryLabels, pending: "待確認" }}
               />
               <Select
                 label="曲庫類型"
@@ -519,7 +531,7 @@ export default function AdminPage() {
                 label="改分類"
                 value={batchCategory}
                 onChange={setBatchCategory}
-                options={categoryLabels}
+                options={{...categoryLabels, pending: "待確認", auto: "逐曲自動判斷"}}
               />
               <button
                 className="small-button"
@@ -551,6 +563,7 @@ export default function AdminPage() {
                   checked={selected.has(song.id)}
                   onSelect={(id, checked) => select(setSelected, id, checked)}
                   onPreview={setPreview}
+                  onCategory={(id, category) => patch({ category }, "的演唱分類", [id])}
                 />
               ))}
             </div>
@@ -676,13 +689,6 @@ export default function AdminPage() {
               <span>已選 {importSelected.size} 首</span>
               <Select
                 className="batch-category"
-                label="匯入分類"
-                value={importCategory}
-                onChange={setImportCategory}
-                options={categoryLabels}
-              />
-              <Select
-                className="batch-category"
                 label="匯入曲庫類型"
                 value={importRegion}
                 onChange={setImportRegion}
@@ -701,7 +707,7 @@ export default function AdminPage() {
                       method: "POST",
                       body: JSON.stringify({
                         ids: [...importSelected],
-                        category: importCategory,
+                        categories: Object.fromEntries(results.filter(song => importSelected.has(song.id) && song.categoryOverride).map(song => [song.id, song.categoryOverride])),
                         region: importRegion,
                       }),
                     });
@@ -720,6 +726,7 @@ export default function AdminPage() {
                 ? "請選擇匯入曲庫；「其他／待分類」不會出題。"
                 : "依 Apple 曲風預選曲庫，仍可手動調整。K-POP 可能包含英文作品。"}
             </p>
+            <p className="small muted">每首歌自動判斷男聲、女聲或男女合唱，可在該列修正；待確認可存草稿，但不會出題。</p>
             <p className="empty" role="status">
               {discoveryMessage}
             </p>
@@ -734,6 +741,7 @@ export default function AdminPage() {
                     select(setImportSelected, id, checked)
                   }
                   onPreview={setPreview}
+                  onCategory={(id, category) => setResults(old => old.map(song => song.id === id ? { ...song, categoryOverride: category === "auto" ? undefined : category } : song))}
                 />
               ))}
             </div>

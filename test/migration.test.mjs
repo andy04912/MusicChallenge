@@ -36,6 +36,8 @@ test('upgrades an existing database without changing release states or guessing 
   const migrated=new DatabaseSync(join(dir,'songs.sqlite'));
   const rows=migrated.prepare('SELECT * FROM songs ORDER BY id').all();
   assert.equal(rows.length,2);
+  assert.ok(rows.every(s=>s.categorySource==='legacy' && s.categoryReview===0));
+  assert.ok(rows.every(s=>s.category===seed.category));
   assert.equal(rows.find(s=>s.id===seed.id).region,'kr');
   assert.equal(rows.find(s=>s.id===seed.id).status,'published');
   assert.equal(rows.find(s=>s.id===999998).region,'other');

@@ -497,3 +497,11 @@ input[type="checkbox"] {
     grid-column: 1/-1;
   }
 }
+
+.song-category { display: grid; gap: 6px; flex: 0 0 148px; }
+.song-category > span { font-size: 11px; color: var(--muted); }
+.song-category select { width: 100%; font-size: 12px; padding: 8px; }
+@media (max-width: 760px) {
+  .song-category { flex-basis: 150px; margin-left: 34px; }
+  .chart-row .song-category { margin-left: 0; }
+}

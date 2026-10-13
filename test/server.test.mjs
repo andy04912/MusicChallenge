@@ -12,7 +12,7 @@ test('admin authorization, release states, import, and restart persistence', asy
   const dir = await mkdtemp(join(tmpdir(), 'seoul-signal-test-'));
   const mock = join(dir, 'apple-mock.mjs');
   // Mock only Apple, outside application code. No production bypass is introduced.
-  await writeFile(mock, `const real=globalThis.fetch; globalThis.fetch=async (url,options)=>String(url).startsWith('https://itunes.apple.com/')?new Response(JSON.stringify({results:[{kind:'song',trackId:999999,trackName:'Import test',artistName:'Test artist',collectionName:'Test album',previewUrl:'https://audio-ssl.itunes.apple.com/test.m4a',trackViewUrl:'https://music.apple.com/tw/album/test/999999',artworkUrl100:'',releaseDate:'2026-01-01'}]}),{headers:{'Content-Type':'application/json'}}):real(url,options);`);
+  await writeFile(mock, `const real=globalThis.fetch; globalThis.fetch=async (url,options)=>String(url).startsWith('https://itunes.apple.com/')?new Response(JSON.stringify({results:[{kind:'song',trackId:999999,trackName:'Import test',artistName:'Test artist',collectionName:'Test album',previewUrl:'https://audio-ssl.itunes.apple.com/test.m4a',trackViewUrl:'https://music.apple.com/tw/album/test/999999',artworkUrl100:'',releaseDate:'2026-01-01'},{kind:'song',trackId:999998,trackName:'Solo test',artistName:'ROSÉ',previewUrl:'https://audio-ssl.itunes.apple.com/test.m4a',trackViewUrl:'https://music.apple.com/tw/song/999998'},{kind:'song',trackId:999997,trackName:'Duet test (feat. Bruno Mars)',artistName:'ROSÉ',previewUrl:'https://audio-ssl.itunes.apple.com/test.m4a',trackViewUrl:'https://music.apple.com/tw/song/999997'}]}),{headers:{'Content-Type':'application/json'}}):real(url,options);`);
   let child, origin, cookie, csrf;
   async function boot(overrides = {}) {
     child = spawn(process.execPath, ['--import', pathToFileURL(mock).href, 'server.mjs'], { cwd: root, env: { ...process.env, PORT:'0', HOST:'127.0.0.1', DATA_DIR:dir, NODE_ENV:'test', APP_ORIGIN:'', SERVE_STATIC:'true', ADMIN_PASSWORD:'local-integration-password-only', ...overrides }, stdio:['ignore','pipe','pipe'] });
@@ -72,9 +72,21 @@ test('admin authorization, release states, import, and restart persistence', asy
     const live=await (await request('/api/catalog')).json();assert.equal(live.length,3);assert.ok(live.every(s=>![ids[0],ids[1]].includes(s.id)));
   });
   await t.test('imports always create drafts, ignore duplicates, and throttle Apple calls',async()=>{
-    const response=await request('/api/admin/import',{method:'POST',body:'{"ids":[999999],"category":"boy","region":"tw"}'});
-    assert.deepEqual(await response.json(),{imported:1,skipped:0});
-    const imported=(await (await request('/api/admin/songs')).json()).find(s=>s.id===999999);assert.equal(imported.status,'draft');assert.equal(imported.category,'boy');assert.equal(imported.region,'tw');
+    const response=await request('/api/admin/import',{method:'POST',body:'{"ids":[999999,999998,999997],"categories":{"999998":"boy"},"region":"tw"}'});
+    assert.deepEqual(await response.json(),{imported:3,skipped:0});
+    const imported=(await (await request('/api/admin/songs')).json()).find(s=>s.id===999999);assert.equal(imported.status,'draft');assert.equal(imported.categoryReview,1);assert.equal(imported.region,'tw');
+    const all=await (await request('/api/admin/songs')).json();
+    assert.equal(all.find(s=>s.id===999998).category,'boy');
+    assert.equal(all.find(s=>s.id===999998).categorySource,'manual');
+    assert.equal(all.find(s=>s.id===999997).category,'other');
+    assert.equal(all.find(s=>s.id===999997).categoryReview,0);
+    assert.equal((await request('/api/admin/songs',{method:'PATCH',body:'{"ids":[999999,999998],"status":"published"}'})).status,409);
+    assert.equal((await (await request('/api/admin/songs')).json()).find(s=>s.id===999998).status,'draft');
+    assert.equal((await request('/api/admin/songs',{method:'PATCH',body:'{"ids":[999999],"category":"boy"}'})).status,200);
+    assert.equal((await (await request('/api/admin/songs')).json()).find(s=>s.id===999999).categorySource,'manual');
+    assert.equal((await request('/api/admin/songs',{method:'PATCH',body:'{"ids":[999998],"category":"boy"}'})).status,200);
+    assert.equal((await request('/api/admin/songs',{method:'PATCH',body:'{"ids":[999998],"category":"auto"}'})).status,200);
+    assert.equal((await (await request('/api/admin/songs')).json()).find(s=>s.id===999998).category,'girl');
     assert.equal((await request('/api/admin/search?q=test')).status,429);
     assert.equal((await (await request('/api/catalog')).json()).length,3);
   });
@@ -82,10 +94,10 @@ test('admin authorization, release states, import, and restart persistence', asy
   await t.test('database state persists across restart, sessions do not',async()=>{
     assert.equal((await request('/api/admin/session')).status,401);
     cookie='';csrf=''; await login();
-    const rows=await (await request('/api/admin/songs')).json();assert.equal(rows.length,36);assert.equal(rows.find(s=>s.id===ids[2]).region,'tw');assert.equal(rows.find(s=>s.id===999999).region,'tw');
+    const rows=await (await request('/api/admin/songs')).json();assert.equal(rows.length,38);assert.equal(rows.find(s=>s.id===ids[2]).region,'tw');assert.equal(rows.find(s=>s.id===999999).region,'tw');
     assert.equal(rows.find(s=>s.id===ids[0]).status,'archived');assert.equal(rows.find(s=>s.id===ids[1]).category,'other');
     assert.equal((await (await request('/api/catalog')).json()).length,3);
-    const response=await request('/api/admin/import',{method:'POST',body:'{"ids":[999999],"category":"girl"}'});
+    const response=await request('/api/admin/import',{method:'POST',body:'{"ids":[999999],"categories":{"999999":"girl"}}'});
     assert.deepEqual(await response.json(),{imported:0,skipped:1});
     assert.equal((await (await request('/api/admin/songs')).json()).find(s=>s.id===999999).category,'boy');
   });

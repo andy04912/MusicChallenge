@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.mjs",
     "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
-    "check": "node --check server.mjs && node --check charts.mjs && node --check scripts/dev.mjs && node --check src/lib/game-logic.js",
+    "check": "node --check server.mjs && node --check charts.mjs && node --check classify.mjs && node --check scripts/dev.mjs && node --check src/lib/game-logic.js",
     "test": "npm run test:server && npm run test:ui",
     "catalog": "python scripts/catalog.py",
     "build": "node scripts/prepare-assets.mjs && vite build",

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { createCharts } from './charts.mjs';
+import { classifySong, manualCategory } from './classify.mjs';
 import { gzipSync } from 'node:zlib';
 
 const base = fileURLToPath(new URL('.', import.meta.url));
@@ -38,13 +39,18 @@ if (!db.prepare('PRAGMA table_info(songs)').all().some(column => column.name ===
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
 }
+// Keep existing operator classifications intact during this additive migration.
+for (const [name, definition] of Object.entries({ categoryReview: 'INTEGER NOT NULL DEFAULT 0', categorySource: "TEXT NOT NULL DEFAULT 'legacy'", categoryReason: "TEXT NOT NULL DEFAULT '既有分類，可逐曲重新判斷'" })) {
+  if (!db.prepare('PRAGMA table_info(songs)').all().some(column => column.name === name)) db.exec(`ALTER TABLE songs ADD COLUMN ${name} ${definition}`);
+}
 const columns = 'id,title,artist,album,artwork,preview,url,year,category,region';
-const insert = db.prepare(`INSERT OR IGNORE INTO songs (${columns}) VALUES (?,?,?,?,?,?,?,?,?,?)`);
-const addSong = song => insert.run(...columns.split(',').map(k => song[k]));
+const importColumns = `${columns},categoryReview,categorySource,categoryReason`;
+const insert = db.prepare(`INSERT OR IGNORE INTO songs (${importColumns}) VALUES (${importColumns.split(',').map(() => '?').join(',')})`);
+const addSong = song => insert.run(...importColumns.split(',').map(k => song[k]));
 if (!db.prepare("SELECT value FROM settings WHERE key='seeded'").get()) {
   db.exec('BEGIN');
   try {
-    for (const song of seed) addSong({ ...song, region: 'kr' });
+    for (const song of seed) addSong({ ...song, ...classifySong(song), region: 'kr' });
     db.prepare("INSERT INTO settings VALUES ('seeded','1')").run();
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -96,7 +102,8 @@ async function apple(path, params) {
 }
 function fromApple(song, category = 'other', region = 'other') {
   if (song.kind !== 'song' || !song.previewUrl?.startsWith('https://') || !song.trackId) return null;
-  return { id: song.trackId, title: song.trackName, artist: song.artistName, album: song.collectionName || '', artwork: song.artworkUrl100 || '', preview: song.previewUrl, url: song.trackViewUrl, year: (song.releaseDate || '').slice(0, 4), category, region };
+  const row = { id: song.trackId, title: song.trackName, artist: song.artistName, album: song.collectionName || '', artwork: song.artworkUrl100 || '', preview: song.previewUrl, url: song.trackViewUrl, year: (song.releaseDate || '').slice(0, 4), category, region };
+  return { ...row, ...classifySong(row) };
 }
 const getChart = createCharts({ lookup: async ids => (await apple('/lookup', { id: ids.join(','), limit: '200' })).map(song => fromApple(song)).filter(Boolean) });
 const serveStatic = process.env.SERVE_STATIC !== 'false';
@@ -124,7 +131,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost'), path = url.pathname, method = req.method;
     if (method === 'GET' && path === '/api/health') return json(res, 200, { ok: true });
-    if (method === 'GET' && path === '/api/catalog') return json(res, 200, db.prepare(`SELECT ${columns} FROM songs WHERE status='published' ORDER BY artist,title`).all());
+    if (method === 'GET' && path === '/api/catalog') return json(res, 200, db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all());
     if (path === '/api/admin/login' && method === 'POST') {
       sameOrigin(req);
       // Do not trust spoofable forwarding headers. A reverse proxy shares this budget.
@@ -169,10 +176,12 @@ const server = createServer(async (req, res) => {
       }
       if (path === '/api/admin/import' && method === 'POST') {
         const input = await body(req), ids = idsFrom(input.ids);
-        if (!['girl','boy','other'].includes(input.category)) throw fail(400, '請選擇分類。');
+        const overrides = input.categories ?? {};
+        if (input.category !== undefined) throw fail(400, '請逐首設定分類。');
+        if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides) || Object.entries(overrides).some(([id, value]) => !ids.includes(Number(id)) || !['girl','boy','other','pending'].includes(value))) throw fail(400, '歌曲分類不正確。');
         const region = input.region ?? 'other';
         if (!['tw','kr','other'].includes(region)) throw fail(400, '歌曲地區不正確。');
-        const songs = (await apple('/lookup', { id: ids.join(',') })).filter(s => ids.includes(s.trackId)).map(s => fromApple(s, input.category, region)).filter(Boolean);
+        const songs = (await apple('/lookup', { id: ids.join(',') })).filter(s => ids.includes(s.trackId)).map(s => fromApple(s, 'other', region)).filter(Boolean).map(song => Object.hasOwn(overrides, song.id) ? { ...song, ...manualCategory(overrides[song.id]) } : song);
         let imported = 0;
         db.exec('BEGIN');
         try { for (const song of songs) imported += Number(addSong(song).changes); db.exec('COMMIT'); }
@@ -185,17 +194,26 @@ const server = createServer(async (req, res) => {
           if (!['draft','published','archived'].includes(input.status)) throw fail(400, '歌曲狀態不正確。');
           updates.push(['status', input.status]);
         }
-        if (input.category !== undefined) {
-          if (!['girl','boy','other'].includes(input.category)) throw fail(400, '歌曲分類不正確。');
-          updates.push(['category', input.category]);
-        }
+        if (input.category !== undefined && !['girl','boy','other','pending','auto'].includes(input.category)) throw fail(400, '歌曲分類不正確。');
         if (input.region !== undefined) {
           if (!['tw','kr','other'].includes(input.region)) throw fail(400, '歌曲地區不正確。');
           updates.push(['region', input.region]);
         }
-        if (!updates.length) throw fail(400, '請指定狀態或分類。');
-        const result = db.prepare(`UPDATE songs SET ${updates.map(([key]) => `${key}=?`).join(',')}, updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id IN (${ids.map(() => '?').join(',')})`).run(...updates.map(([,v]) => v), ...ids);
-        return json(res, 200, { updated: Number(result.changes) });
+        if (!updates.length && input.category === undefined) throw fail(400, '請指定狀態或分類。');
+        const rows = db.prepare(`SELECT * FROM songs WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+        const changes = rows.map(song => {
+          const values = Object.fromEntries(updates);
+          if (input.category !== undefined) Object.assign(values, input.category === 'auto' ? classifySong(song) : manualCategory(input.category));
+          if ((values.status ?? song.status) === 'published' && (values.categoryReview ?? song.categoryReview)) throw fail(409, '待確認歌曲不能開放；已開放歌曲請先移回草稿，再改成待確認。');
+          return [song.id, values];
+        });
+        let updated = 0;
+        db.exec('BEGIN');
+        try {
+          for (const [id, values] of changes) updated += Number(db.prepare(`UPDATE songs SET ${Object.keys(values).map(key => `${key}=?`).join(',')}, updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?`).run(...Object.values(values), id).changes);
+          db.exec('COMMIT');
+        } catch (error) { db.exec('ROLLBACK'); throw error; }
+        return json(res, 200, { updated });
       }
       throw fail(404, '找不到這個功能。');
     }

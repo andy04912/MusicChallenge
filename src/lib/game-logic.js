@@ -12,6 +12,7 @@ export const filterPool = (songs, region = "kr", category = "all") =>
     (song) =>
       ["tw", "kr"].includes(region) &&
       song.region === region &&
+      !song.categoryReview &&
       (category === "all" || song.category === category),
   );
 

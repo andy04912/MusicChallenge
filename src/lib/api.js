@@ -32,7 +32,7 @@ export const regionLabels = {
 export const categoryLabels = {
   girl: "女聲／女團",
   boy: "男聲／男團",
-  other: "男女合唱／其他",
+  other: "男女合唱",
 };
 export const statusLabels = {
   draft: "草稿",
