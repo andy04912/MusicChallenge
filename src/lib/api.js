@@ -1,15 +1,117 @@
-export async function request(path, options = {}) {
-  const response = await fetch(path, {
-    cache: "no-store",
-    ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+// Memory only: share navigation data between routes, never persist identities,
+// room state or answers in the service worker / browser storage.
+const responses = new Map(),
+  inFlight = new Map();
+let generation = 0;
+function lifetime(path) {
+  if (["/api/catalog", "/api/player", "/api/config"].includes(path))
+    return 60_000;
+  if (path.startsWith("/api/leaderboard?")) return 15_000;
+  return 0;
+}
+export function cachedResponse(path) {
+  const entry = responses.get(path);
+  if (entry && entry.expires > Date.now()) return entry.value;
+  responses.delete(path);
+  return undefined;
+}
+export function clearRequestCache() {
+  generation++;
+  responses.clear();
+  inFlight.clear();
+}
+function saveResponse(path, value) {
+  if (responses.size >= 40) responses.delete(responses.keys().next().value);
+  responses.set(path, { value, expires: Date.now() + lifetime(path) });
+}
+function cancelled(signal) {
+  return signal.reason || new DOMException("Aborted", "AbortError");
+}
+// Leaving one route cancels that subscriber, not a shared read needed by the
+// next route. This also avoids duplicate guest creation during quick switching.
+function subscribe(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(cancelled(signal));
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(cancelled(signal));
+    signal.addEventListener("abort", abort, { once: true });
+    promise
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
   });
-  const result = await response.json();
-  if (!response.ok)
-    throw Object.assign(new Error(result.error || "操作失敗，請稍後重試。"), {
-      status: response.status,
+}
+async function fetchJSON(path, options) {
+  const {
+    signal,
+    timeout = path.startsWith("/api/admin") ? 90_000 : 15_000,
+    ...init
+  } = options;
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort(cancelled(signal));
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeout);
+  try {
+    const response = await fetch(path, {
+      cache: "no-store",
+      ...init,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...init.headers },
     });
-  return result;
+    const result = await response.json().catch(() => {
+      if (controller.signal.aborted) throw controller.signal.reason;
+      throw new Error("伺服器暫時無法回應，請稍後重試。");
+    });
+    if (!response.ok)
+      throw Object.assign(new Error(result.error || "操作失敗，請稍後重試。"), {
+        status: response.status,
+      });
+    return result;
+  } catch (error) {
+    if (timedOut)
+      throw Object.assign(new Error("連線逾時，請檢查網路後重試。"), {
+        name: "TimeoutError",
+      });
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+export async function request(path, options = {}) {
+  if (options.signal?.aborted) throw cancelled(options.signal);
+  const method = (options.method || "GET").toUpperCase();
+  const ttl = method === "GET" ? lifetime(path) : 0;
+  if (ttl) {
+    const cached = cachedResponse(path);
+    if (cached !== undefined) return cached;
+    let pending = inFlight.get(path);
+    if (!pending) {
+      const version = generation;
+      pending = fetchJSON(path, { ...options, signal: undefined })
+        .then((value) => {
+          if (version === generation) saveResponse(path, value);
+          return value;
+        })
+        .finally(() => {
+          if (inFlight.get(path) === pending) inFlight.delete(path);
+        });
+      inFlight.set(path, pending);
+    }
+    return subscribe(pending, options.signal);
+  }
+  if (method !== "GET") clearRequestCache();
+  const value = await fetchJSON(path, options);
+  if (method !== "GET") {
+    // Reads that overlapped a mutation must not keep stale rankings/catalogs.
+    clearRequestCache();
+    if (path === "/api/player" && method === "PATCH") saveResponse(path, value);
+  }
+  return value;
 }
 export function appleURL(song) {
   try {

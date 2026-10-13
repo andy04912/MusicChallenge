@@ -2,6 +2,8 @@
 
 2026-10-13：前後端已上線，HTTPS、後台登入及重啟資料持久性已驗證。
 
+2026-10-14：正式網域更名為 `music-challenge.zeabur.app`，後端 `APP_ORIGIN` 已同步並重新部署；舊的 `seoul-signal.zeabur.app` 綁定已移除。新網域的 HTTPS、前後台、API 與 558 首公開歌曲已驗證。更換網域後需重新登入後台，原網域的 Cookie／本地暱稱／PWA 安裝不會自動移轉。
+
 - GitHub：https://github.com/andy04912/MusicChallenge ，分支 `main`
 - GitHub `main` 推送後會自動觸發前後端部署。
 - 指定伺服器：Tencent Jakarta 2C 2GB
@@ -11,10 +13,10 @@
 - Backend：6acd1f544873e494859de171，Dockerfile.backend
 - Frontend：6acd1f574873e494859de174，Dockerfile.frontend
 - 兩個服務使用同一 GitHub repository 根目錄，各自建置 Docker image。
-- 前台：https://seoul-signal.zeabur.app
-- 後台：https://seoul-signal.zeabur.app/admin
+- 前台：https://music-challenge.zeabur.app
+- 後台：https://music-challenge.zeabur.app/admin
 - 前端 API_UPSTREAM：http://service-6acd1f544873e494859de171.environment-6acd1f3e5a13ed952d8b20e4.zeabur.internal:8080
-- 後端 APP_ORIGIN：https://seoul-signal.zeabur.app
+- 後端 APP_ORIGIN：https://music-challenge.zeabur.app
 - 前後端均使用 web port 8080；後端沒有公開網域。
 - Backend Volume：songs-data，掛載 `/data`，保存 songs.sqlite 與 WAL 檔案。
 - 正式管理員密碼保存於本機 `.env.production` 的 ADMIN_PASSWORD（Git 忽略，不上傳）。

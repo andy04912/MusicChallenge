@@ -12,7 +12,7 @@ import {
   TrophyIcon,
 } from "@phosphor-icons/react";
 import QRCode from "qrcode";
-import { request, appleURL } from "../lib/api.js";
+import { request, appleURL, cachedResponse } from "../lib/api.js";
 import { readPlayerName, savePlayerName } from "../lib/player-name.js";
 import { decadeLabels, filterPool } from "../lib/game-logic.js";
 import { validRoomCode } from "../lib/room-client.js";
@@ -279,14 +279,21 @@ export default function PartyPage() {
     navigate = useNavigate(),
     { setGameActive, showHelp } = useOutletContext() || {};
   const [room, setRoom] = useState(null),
-    [catalog, setCatalog] = useState([]),
+    [catalog, setCatalog] = useState(
+      () => cachedResponse("/api/catalog") || [],
+    ),
     [nickname, setNickname] = useState(() => readPlayerName()),
     [settings, setSettings] = useState({
       region: "kr",
       category: "all",
       decade: "all",
     });
-  const [loading, setLoading] = useState(true),
+  const [loading, setLoading] = useState(
+      () =>
+        !!code ||
+        !cachedResponse("/api/catalog") ||
+        !cachedResponse("/api/player"),
+    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [connected, setConnected] = useState(true),
@@ -317,7 +324,11 @@ export default function PartyPage() {
   useEffect(() => {
     mounted.current = true;
     const abort = new AbortController();
-    setLoading(true);
+    setLoading(
+      !!code ||
+        !cachedResponse("/api/catalog") ||
+        !cachedResponse("/api/player"),
+    );
     setRoom(null);
     current.current = null;
     setError("");

@@ -149,7 +149,10 @@ export default function AppShell() {
         )}
       </aside>
       <main id="main-content" className="wrap shell-content">
-        <Outlet key={location.key} context={{ setGameActive, showHelp }} />
+        <Outlet
+          key={location.pathname + location.search}
+          context={{ setGameActive, showHelp }}
+        />
       </main>
       <footer className="site-footer wrap">
         <span>APPLE MUSIC PREVIEWS</span>

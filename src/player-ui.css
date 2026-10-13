@@ -109,8 +109,8 @@ html[data-theme="dark"] .player-shell {
   border: 0;
   border-radius: 50%;
   color: var(--button-ink);
-  background: var(--pink);
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--pink), #000 24%);
+  background: var(--turntable-pink);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--turntable-pink), #000 24%);
   transition: transform 0.12s;
 }
 .player-shell .listen-panel .play-button svg {
@@ -236,7 +236,7 @@ html[data-theme="dark"] .player-shell {
   gap: 1px;
   border: 0;
   border-radius: 0;
-  background: var(--pink);
+  background: var(--turntable-pink);
   color: var(--button-ink);
 }
 .answer-submit svg {
@@ -268,8 +268,21 @@ html[data-theme="dark"] .player-shell {
   border-radius: 0;
 }
 .player-shell .song-suggestion {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  touch-action: manipulation;
   min-height: 44px;
   padding: 5px 12px;
+}
+.player-shell .song-suggestion:hover,
+.player-shell .song-suggestion:not(:disabled):active {
+  transform: none;
 }
 .player-shell .song-suggestion strong,
 .player-shell .song-suggestion span {

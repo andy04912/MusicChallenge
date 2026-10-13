@@ -4,7 +4,7 @@ import {
   CaretLeftIcon,
   CaretRightIcon,
 } from "@phosphor-icons/react";
-import { request } from "../lib/api.js";
+import { request, cachedResponse } from "../lib/api.js";
 import LoadingState from "../components/LoadingState.jsx";
 export default function LeaderboardPage() {
   const [mode, setMode] = useState("classic"),
@@ -45,12 +45,12 @@ export default function LeaderboardPage() {
   useEffect(() => {
     if (!limit) return;
     const abort = new AbortController();
-    setLoading(true);
+    const path = `/api/leaderboard?mode=${mode}&region=${region}&offset=${page * limit}&limit=${limit}`;
+    const cached = cachedResponse(path);
+    if (cached) setData(cached);
+    setLoading(!cached);
     setError("");
-    request(
-      `/api/leaderboard?mode=${mode}&region=${region}&offset=${page * limit}&limit=${limit}`,
-      { signal: abort.signal },
-    )
+    request(path, { signal: abort.signal })
       .then((value) => {
         if (!abort.signal.aborted) setData(value);
       })
