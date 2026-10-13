@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifySong } from '../classify.mjs';
+import { classifySong, excludedVersionReason } from '../classify.mjs';
 const classify = (title, artist) => classifySong({ id: 42, title, artist });
 test('same lead artist can have solo and mixed song classifications', () => {
   assert.equal(classify('Solo song', 'ROSÉ').category, 'girl');
@@ -26,4 +26,19 @@ test('unknown versions and missing metadata require review; exact song metadata 
   for(const title of ['Song (Instrumental)','Song (Remix)','']) assert.equal(classify(title,'TWICE').categoryReview,1);
   assert.equal(classifySong({id:1824672652,title:'Different song',artist:'Unknown'}).categoryReview,1);
   assert.equal(classifySong({id:1824672652,title:'JUMP',artist:'BLACKPINK'}).categoryReview,0);
+});
+
+test('excludes explicit Live recording markers in titles or albums', () => {
+  for (const title of ['Song (Live)', 'Song [LIVE at Taipei]', 'Song - Live', 'Song — Live from Seoul', 'Song (2026 Live)', 'Song (現場版)', 'Song（现场）', 'Song - 現場錄音']) {
+    assert.equal(excludedVersionReason({title,artist:'Singer'}),'Live 現場版本',title);
+  }
+  assert.equal(excludedVersionReason({title:'Song',album:'Live at Wembley'}),'Live 現場版本');
+  assert.equal(excludedVersionReason({title:'Song',album:'巡迴演唱會現場全紀錄'}),'Live 現場版本');
+});
+test('excludes explicit featured credits without excluding ordinary collaborations or substring matches', () => {
+  for(const title of ['Song (feat. Guest)','Song ft. Guest','Song (FEAT Guest)','Song featuring Guest','Song（ｆｅａｔ． Guest）']) assert.equal(excludedVersionReason({title}),'Feat 合作版本',title);
+  assert.equal(excludedVersionReason({title:'Song',artist:'Singer feat. Guest'}),'Feat 合作版本');
+  for(const title of ['Live Forever','Long Live','I Live for You','Believe','Defeat','Song']) assert.equal(excludedVersionReason({title,artist:'Singer & Guest',album:"Special Edition 'Still Alive'"}),null,title);
+  assert.equal(excludedVersionReason({title:'APT.',artist:'ROSÉ & Bruno Mars'}),null);
+  assert.equal(excludedVersionReason({title:'Solo',album:'Album (feat. Guest)'}),null); // album-level feature is not a track credit
 });

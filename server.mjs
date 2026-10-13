@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { createCharts } from './charts.mjs';
-import { classifySong, manualCategory } from './classify.mjs';
+import { classifySong, manualCategory, excludedVersionReason } from './classify.mjs';
 import { gzipSync } from 'node:zlib';
 
 const base = fileURLToPath(new URL('.', import.meta.url));
@@ -157,7 +157,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost'), path = url.pathname, method = req.method;
     if (method === 'GET' && path === '/api/health') return json(res, 200, { ok: true });
-    if (method === 'GET' && path === '/api/catalog') return json(res, 200, db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all());
+    if (method === 'GET' && path === '/api/catalog') return json(res, 200, db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all().filter(song => !excludedVersionReason(song)));
     if (path === '/api/admin/login' && method === 'POST') {
       sameOrigin(req);
       // Do not trust spoofable forwarding headers. A reverse proxy shares this budget.
@@ -188,7 +188,7 @@ const server = createServer(async (req, res) => {
         sessionCookie(res, '', 0);
         return json(res, 200, { ok: true });
       }
-      if (path === '/api/admin/songs' && method === 'GET') return json(res, 200, db.prepare('SELECT * FROM songs ORDER BY updatedAt DESC,id DESC').all());
+      if (path === '/api/admin/songs' && method === 'GET') return json(res, 200, db.prepare('SELECT * FROM songs ORDER BY updatedAt DESC,id DESC').all().map(song => ({ ...song, excludedReason: excludedVersionReason(song) })));
       if (path === '/api/admin/charts' && method === 'GET') {
         const chart = await getChart(url.searchParams.get('type'));
         const existing = new Set(db.prepare('SELECT id FROM songs').all().map(s => s.id));
@@ -197,7 +197,7 @@ const server = createServer(async (req, res) => {
       if (path === '/api/admin/search' && method === 'GET') {
         const q = url.searchParams.get('q')?.trim();
         if (!q || q.length > 100) throw fail(400, '請輸入 1 至 100 字的歌名或歌手。');
-        const songs = (await apple('/search', { term: q, limit: '100' })).map(s => fromApple(s)).filter(Boolean);
+        const songs = (await apple('/search', { term: q, limit: '100' })).map(s => fromApple(s)).filter(s => s && !excludedVersionReason(s));
         const existing = new Set(db.prepare('SELECT id FROM songs').all().map(s => s.id));
         return json(res, 200, songs.map(s => ({ ...s, imported: existing.has(s.id) })));
       }
@@ -208,7 +208,7 @@ const server = createServer(async (req, res) => {
         if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides) || Object.entries(overrides).some(([id, value]) => !ids.includes(Number(id)) || !['girl','boy','other','pending'].includes(value))) throw fail(400, '歌曲分類不正確。');
         const region = input.region ?? 'other';
         if (!['tw','kr','other'].includes(region)) throw fail(400, '歌曲地區不正確。');
-        const songs = (await apple('/lookup', { id: ids.join(',') })).filter(s => ids.includes(s.trackId)).map(s => fromApple(s, 'other', region)).filter(Boolean).map(song => Object.hasOwn(overrides, song.id) ? { ...song, ...manualCategory(overrides[song.id]) } : song);
+        const songs = (await apple('/lookup', { id: ids.join(',') })).filter(s => ids.includes(s.trackId)).map(s => fromApple(s, 'other', region)).filter(s => s && !excludedVersionReason(s)).map(song => Object.hasOwn(overrides, song.id) ? { ...song, ...manualCategory(overrides[song.id]) } : song);
         let imported = 0;
         db.exec('BEGIN');
         try { for (const song of songs) imported += Number(addSong(song).changes); db.exec('COMMIT'); }
@@ -231,6 +231,7 @@ const server = createServer(async (req, res) => {
         const changes = rows.map(song => {
           const values = Object.fromEntries(updates);
           if (input.category !== undefined) Object.assign(values, input.category === 'auto' ? classifySong(song) : manualCategory(input.category));
+          if ((values.status ?? song.status) === 'published' && excludedVersionReason(song)) throw fail(409, 'Live 與 Feat 版本已排除，不能開放。');
           if ((values.status ?? song.status) === 'published' && (values.categoryReview ?? song.categoryReview)) throw fail(409, '待確認歌曲不能開放；已開放歌曲請先移回草稿，再改成待確認。');
           return [song.id, values];
         });

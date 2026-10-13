@@ -45,3 +45,18 @@ test('lookup throttling remains actionable',async()=>{
   const chart=createCharts({fetchFeed:async()=>response([entry(10)]),lookup:async()=>{throw Object.assign(new Error('Wait'),{status:429});}});
   await assert.rejects(chart('mandopop'),{status:429});
 });
+
+test('charts omit excluded feed and lookup versions without renumbering the original chart',async()=>{
+  const chart=createCharts({fetchFeed:async()=>response([
+    {...entry(10),name:'Song (Live)'}, {...entry(20),name:'Song (feat. Guest)'}, entry(30), entry(40), {...entry(50),name:'Song (Live)'}, entry(60)
+  ]),lookup:async ids=>{
+    assert.deepEqual(ids,[30,40,60]);
+    return [{id:30,title:'Studio',album:'Live at Taipei'},{id:40,title:'Studio',artist:'Singer & Guest'},{id:60,title:'Version (ft. Guest)'}];
+  }});
+  const result=await chart('mandopop');
+  assert.deepEqual(result.songs.map(s=>[s.id,s.rank]),[[40,4]]);
+});
+test('a chart containing only excluded versions is valid and does not query lookup with empty IDs',async()=>{
+  const chart=createCharts({fetchFeed:async()=>response([{...entry(10),name:'Song (Live)'}]),lookup:async()=>assert.fail('No lookup expected')});
+  assert.deepEqual((await chart('mandopop')).songs,[]);
+});

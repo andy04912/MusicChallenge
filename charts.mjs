@@ -1,3 +1,4 @@
+import { excludedVersionReason } from './classify.mjs';
 // One Taiwan chart, split by Apple's genre metadata. Never use the Korea chart.
 const chartTypes = {
   mandopop: { genreId: '1253', region: 'tw', label: '華語' },
@@ -14,9 +15,10 @@ export function createCharts({ lookup, fetchFeed = fetch, now = Date.now, ttl = 
       if (!response.ok) throw new Error(`Apple chart ${response.status}`);
       const { feed } = await response.json();
       if (!Array.isArray(feed?.results) || !feed.results.length) throw new Error('Empty Apple chart');
-      const entries = feed.results.slice(0, 100).map((song, index) => ({ ...song, rank: index + 1, id: Number(song.id) })).filter(song => Number.isSafeInteger(song.id) && song.id > 0);
-      if (!entries.length) throw new Error('Invalid Apple chart');
-      const previews = new Map((await lookup(entries.map(s => s.id))).map(song => [song.id, song]));
+      const validEntries = feed.results.slice(0, 100).map((song, index) => ({ ...song, rank: index + 1, id: Number(song.id) })).filter(song => Number.isSafeInteger(song.id) && song.id > 0);
+      if (!validEntries.length) throw new Error('Invalid Apple chart');
+      const entries = validEntries.filter(entry => !excludedVersionReason({ title: entry.name, artist: entry.artistName }));
+      const previews = new Map((entries.length ? await lookup(entries.map(s => s.id)) : []).map(song => [song.id, song]));
       const data = {
         storefront: 'tw', updatedAt: feed.updated || null,
         fetchedAt: new Date(now()).toISOString(), sourceUrl,
@@ -26,7 +28,7 @@ export function createCharts({ lookup, fetchFeed = fetch, now = Date.now, ttl = 
             year: (entry.releaseDate || '').slice(0, 4), category: 'other', preview: null,
             ...song, rank: entry.rank, unavailable: !song,
             genreIds: (entry.genres || []).map(genre => String(genre.genreId)) };
-        })
+        }).filter(song => !excludedVersionReason(song))
       };
       cached = { cachedAt: now(), data };
       return data;

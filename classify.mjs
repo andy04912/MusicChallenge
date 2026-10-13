@@ -31,3 +31,15 @@ export function classifySong(song) {
 export function manualCategory(category) {
   return { category: category === 'pending' ? 'other' : category, categoryReview: category === 'pending' ? 1 : 0, categorySource: 'manual', categoryReason: category === 'pending' ? '人工標記待確認' : '人工確認此曲分類' };
 }
+
+// Match explicit version/credit markers, never artist gender or "Live" substrings.
+export function excludedVersionReason(song) {
+  const title = String(song.title || '').normalize('NFKC');
+  const artist = String(song.artist || '').normalize('NFKC');
+  const album = String(song.album || '').normalize('NFKC');
+  const featured = /(?:^|[^\p{L}\p{N}])(?:feat\.?|ft\.?|featuring)(?=$|[^\p{L}\p{N}])/iu;
+  if (featured.test(title) || featured.test(artist)) return 'Feat 合作版本';
+  const live = /[(\[][^()[\]]*\blive\b[^()[\]]*[)\]]|(?:^|\s[-–—:]\s*)live(?:$|\s+(?:at|from|in|version|session|recording|20\d{2}|19\d{2})\b)|\blive\s+(?:version|session|recording)\b|(?:現場|现场)(?:版|錄音|录音|演出|實錄|实录)|演唱[會会](?:版|現場|现场|實錄|实录|全紀錄|全纪录)|[(\[]\s*(?:現場|现场|ライブ)\s*[)\]]/iu;
+  if (live.test(title) || live.test(album)) return 'Live 現場版本';
+  return null;
+}

@@ -60,6 +60,7 @@ function SongRow({ song, discovery, checked, onSelect, onPreview, onCategory }) 
       />
       <div className="song-details">
         <strong>{song.title}</strong>
+        {song.excludedReason && <p>已排除：{song.excludedReason}</p>}
         <p>
           {[song.artist, song.album, song.year].filter(Boolean).join(" · ")}
         </p>
@@ -726,7 +727,7 @@ export default function AdminPage() {
                 ? "請選擇匯入曲庫；「其他／待分類」不會出題。"
                 : "依 Apple 曲風預選曲庫，仍可手動調整。K-POP 可能包含英文作品。"}
             </p>
-            <p className="small muted">每首歌自動判斷男聲、女聲或男女合唱，可在該列修正；待確認可存草稿，但不會出題。</p>
+            <p className="small muted">已過濾 Live／Feat 版本。每首歌自動判斷演唱分類；待確認可存草稿，但不會出題。</p>
             <p className="empty" role="status">
               {discoveryMessage}
             </p>
