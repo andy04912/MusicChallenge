@@ -3,7 +3,7 @@
 2026-10-13：前後端已上線，HTTPS、後台登入及重啟資料持久性已驗證。
 
 - GitHub：https://github.com/andy04912/MusicChallenge ，分支 `main`
-- 應用程式部署提交：`69011c9`
+- GitHub `main` 推送後會自動觸發前後端部署。
 - 指定伺服器：Tencent Jakarta 2C 2GB
 - Server ID：6a50c5bfe33921bfb5d0f989
 - Project：Music-Challenge / 6acd1f3efaa6e043a4b709ca（Zeabur 名稱欄位不接受空格）
@@ -28,3 +28,7 @@
 - 前端透過完整內網 DNS 名稱代理 API，確認後端重啟後可恢復連線。
 
 沒有修改「印尼騰訊雲」伺服器或其中的專案。
+
+## 排行榜更新
+
+熱門來源統一使用 Apple Music 台灣 Top 100，分為華語（genre 1253）與 K-POP（genre 51），保留台灣總榜名次；不再讀取韓國榜。兩分類共用快取與台灣商店試聽，匯入仍為草稿。

@@ -156,7 +156,7 @@ const server = createServer(async (req, res) => {
       }
       if (path === '/api/admin/songs' && method === 'GET') return json(res, 200, db.prepare('SELECT * FROM songs ORDER BY updatedAt DESC,id DESC').all());
       if (path === '/api/admin/charts' && method === 'GET') {
-        const chart = await getChart(url.searchParams.get('region'));
+        const chart = await getChart(url.searchParams.get('type'));
         const existing = new Set(db.prepare('SELECT id FROM songs').all().map(s => s.id));
         return json(res, 200, { ...chart, songs: chart.songs.map(song => ({ ...song, imported: existing.has(song.id) })) });
       }

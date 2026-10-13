@@ -56,3 +56,33 @@ test("admin session, batch region update, release and logout retain their API co
   expect(screen.queryByText("七里香")).not.toBeInTheDocument();
   vi.unstubAllGlobals();
 });
+
+test("Taiwan chart tabs preselect the matching import library and retain draft import", async () => {
+  const calls = [];
+  vi.stubGlobal("fetch", vi.fn(async (path, options) => {
+    calls.push([path, options]);
+    if (path.endsWith("/session")) return new Response(JSON.stringify({csrf:"test-csrf"}));
+    if (path.includes("charts?type=")) {
+      const region = path.endsWith("kpop") ? "kr" : "tw";
+      return new Response(JSON.stringify({region,updatedAt:"2026-10-13T00:00:00Z",songs:[{id:42,title:"Chart song",artist:"Artist",rank:7,region,preview:"https://audio-ssl.itunes.apple.com/test.m4a"}]}));
+    }
+    if (path.endsWith("/import")) return new Response(JSON.stringify({imported:1}));
+    return new Response("[]");
+  }));
+  const user=userEvent.setup(); render(<AdminPage />);
+  await screen.findByRole("heading",{name:"歌曲管理"});
+  await user.click(screen.getByRole("tab",{name:"搜尋 Apple 曲庫"}));
+  expect(screen.queryByRole("button",{name:"韓國熱門"})).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button",{name:"台灣熱門・華語"}));
+  await waitFor(()=>expect(screen.getByRole("combobox",{name:"匯入曲庫類型"})).toHaveValue("tw"));
+  await user.click(screen.getByRole("checkbox",{name:"選擇 Chart song · Artist"}));
+  await user.click(screen.getByRole("button",{name:"台灣熱門・K-POP"}));
+  await waitFor(()=>expect(screen.getByRole("combobox",{name:"匯入曲庫類型"})).toHaveValue("kr"));
+  expect(screen.getByRole("checkbox",{name:"選擇 Chart song · Artist"})).not.toBeChecked();
+  await user.click(screen.getByRole("checkbox",{name:"選擇 Chart song · Artist"}));
+  await user.click(screen.getByRole("button",{name:"加入草稿"}));
+  await waitFor(()=>expect(calls.some(([path])=>path.endsWith('/import'))).toBe(true));
+  const imported=JSON.parse(calls.find(([path])=>path.endsWith('/import'))[1].body);
+  expect(imported).toEqual({ids:[42],category:"other",region:"kr"});
+  vi.unstubAllGlobals();
+});

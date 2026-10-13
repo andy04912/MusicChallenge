@@ -273,8 +273,9 @@ export default function AdminPage() {
     setChartTime("");
     setDiscoveryMessage("正在載入排行榜與試聽資訊…");
     try {
-      const chart = await api(`charts?region=${which}`);
+      const chart = await api(`charts?type=${which}`);
       setResults(chart.songs);
+      setImportRegion(chart.region);
       const time = new Date(chart.updatedAt || chart.fetchedAt);
       setChartTime(
         `榜單時間：${Number.isNaN(time.getTime()) ? "未提供" : time.toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}（台北時間），每 30 分鐘更新快取`,
@@ -575,8 +576,8 @@ export default function AdminPage() {
             >
               {Object.entries({
                 search: "搜尋歌名／歌手",
-                tw: "台灣熱門",
-                kr: "韓國熱門",
+                mandopop: "台灣熱門・華語",
+                kpop: "台灣熱門・K-POP",
               }).map(([key, label]) => (
                 <button
                   key={key}
@@ -591,11 +592,10 @@ export default function AdminPage() {
               <div className="chart-heading">
                 <div>
                   <h2>
-                    {source === "tw" ? "台灣熱門 Top 50" : "韓國熱門 Top 50"}
+                    {source === "mandopop" ? "台灣熱門・華語" : "台灣熱門・K-POP"}
                   </h2>
                   <p>
-                    Apple Music
-                    當地熱門榜，包含各語言歌曲。可試聽曲目以台灣商店供應為準。
+                    Apple Music 台灣 Top 100，依曲風分類，保留總榜名次。
                   </p>
                   <p className="small muted">{chartTime}</p>
                 </div>
@@ -716,7 +716,9 @@ export default function AdminPage() {
               </button>
             </div>
             <p className="small muted">
-              曲庫類型由你指定，與排行榜所在地無關。可先匯入，再於題庫批次分類；「其他／待分類」不會出題。華語依歌曲語言分類；女聲／男聲包含個人歌手與團體，男女合唱／其他只在「男女合併」出題。
+              {source === "search"
+                ? "請選擇匯入曲庫；「其他／待分類」不會出題。"
+                : "依 Apple 曲風預選曲庫，仍可手動調整。K-POP 可能包含英文作品。"}
             </p>
             <p className="empty" role="status">
               {discoveryMessage}

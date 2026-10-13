@@ -41,14 +41,14 @@ test('admin authorization, release states, import, and restart persistence', asy
     assert.deepEqual(await (await request('/api/catalog')).json(),[]);
     for(const path of ['/catalog.json','/seeds/catalog.json','/data/songs.sqlite','/.env']) assert.equal((await request(path)).status,404);
     assert.equal((await request('/api/admin/songs')).status,401);
-    assert.equal((await request('/api/admin/charts?region=tw')).status,401);
+    assert.equal((await request('/api/admin/charts?type=mandopop')).status,401);
     assert.equal((await request('/api/admin/songs',{method:'PATCH',body:'{"ids":[1],"status":"published"}'})).status,401);
   });
   await t.test('login checks origin and password',async()=>{
     assert.equal((await request('/api/admin/login',{method:'POST',headers:{Origin:'https://other.test'},body:'{}'})).status,403);
     assert.equal((await request('/api/admin/login',{method:'POST',body:'{"password":"wrong"}'})).status,401);
     await login();
-    assert.equal((await request('/api/admin/charts?region=invalid')).status,400);
+    assert.equal((await request('/api/admin/charts?type=invalid')).status,400);
   });
   const songs=await (await request('/api/admin/songs')).json();
   assert.equal(songs.length,35); assert.ok(songs.every(s=>s.status==='draft')); assert.ok(songs.every(s=>s.region==='kr'));
