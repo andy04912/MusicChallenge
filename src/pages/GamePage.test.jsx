@@ -63,6 +63,30 @@ test("catalog network failure offers an actionable retry", async () => {
   vi.unstubAllGlobals();
 });
 
+test("decade choice restricts both rounds and autocomplete and survives returning home", async () => {
+  const catalog = [...songs, ...songs.map(song => ({...song, id: song.id + 10, title: `Old ${song.id}`, year: "2004"}))];
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(catalog))));
+  const user = userEvent.setup();
+  render(<GamePage />);
+  await screen.findByRole("button", {name: "開始猜歌"});
+  await user.click(screen.getByRole("button", {name: "2010–2019"}));
+  expect(screen.getByRole("button", {name: "歌曲準備中"})).toBeDisabled();
+  await user.click(screen.getByRole("button", {name: "2000–2009"}));
+  await user.click(screen.getByRole("button", {name: "開始猜歌"}));
+  await screen.findByRole("combobox");
+  fireEvent.playing(document.querySelector("audio"));
+  await user.type(screen.getByRole("combobox"), "Song");
+  expect(screen.queryByRole("option")).not.toBeInTheDocument();
+  await user.clear(screen.getByRole("combobox"));
+  await user.type(screen.getByRole("combobox"), "Old");
+  expect(screen.getAllByRole("option")).toHaveLength(5);
+  await user.click(screen.getByRole("button", {name: /直接揭曉/}));
+  expect(screen.getByRole("heading", {name: /^Old /})).toBeVisible();
+  await user.click(screen.getByRole("button", {name: "回到選曲"}));
+  expect(screen.getByRole("button", {name: "2000–2009"})).toHaveAttribute("aria-pressed", "true");
+  vi.unstubAllGlobals();
+});
+
 test("speed points start with audible playback, never reset on pause/replay, and reset for each new round", async () => {
   vi.stubGlobal(
     "fetch",

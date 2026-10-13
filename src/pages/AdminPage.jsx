@@ -13,6 +13,7 @@ import {
   statusLabels,
 } from "../lib/api.js";
 import SelectionCheckbox from "../components/SelectionCheckbox.jsx";
+import { decadeLabels, matchesDecade } from "../lib/game-logic.js";
 import "../admin.css";
 
 function Select({ label, value, onChange, options, className }) {
@@ -29,7 +30,22 @@ function Select({ label, value, onChange, options, className }) {
     </label>
   );
 }
-function SongRow({ song, discovery, checked, onSelect, onPreview, onCategory }) {
+function SongYear({ song, onYear }) {
+  const [value, setValue] = useState(song.year || "");
+  useEffect(() => setValue(song.year || ""), [song.year]);
+  return (
+    <form className="song-year" onSubmit={event => { event.preventDefault(); onYear(song.id, value); }}>
+      <label>
+        發行年份
+        <input aria-label={`發行年份 ${song.title} · ${song.artist}`} type="text" inputMode="numeric"
+          pattern="(19|20)[0-9]{2}" maxLength={4} placeholder="未知" value={value}
+          onChange={event => setValue(event.target.value)} />
+      </label>
+      {value !== (song.year || "") && <button className="small-button" aria-label={`儲存年份 ${song.title} · ${song.artist}`}>儲存</button>}
+    </form>
+  );
+}
+function SongRow({ song, discovery, checked, onSelect, onPreview, onCategory, onYear }) {
   const classification = discovery && song.categoryOverride
     ? song.categoryOverride
     : song.categoryReview || !song.categorySource ? "pending" : song.category;
@@ -64,6 +80,7 @@ function SongRow({ song, discovery, checked, onSelect, onPreview, onCategory }) 
         <p>
           {[song.artist, song.album, song.year].filter(Boolean).join(" · ")}
         </p>
+        {!discovery && <SongYear song={song} onYear={onYear} />}
       </div>
       <div className="row-tags">
         <span className={`status ${song.status || ""}`}>
@@ -162,6 +179,9 @@ export default function AdminPage() {
     [status, setStatus] = useState("all"),
     [category, setCategory] = useState("all"),
     [region, setRegion] = useState("all"),
+    [decade, setDecade] = useState("all"),
+    [discoveryDecade, setDiscoveryDecade] = useState("all"),
+    [discoveryYear, setDiscoveryYear] = useState(""),
     [appleQuery, setAppleQuery] = useState("");
   const [batchCategory, setBatchCategory] = useState("girl"),
     [batchRegion, setBatchRegion] = useState("tw"),
@@ -245,13 +265,15 @@ export default function AdminPage() {
           (status === "all" || song.status === status) &&
           (category === "all" || (category === "pending" ? song.categoryReview : !song.categoryReview && song.category === category)) &&
           (region === "all" || song.region === region) &&
-          `${song.title} ${song.artist} ${song.album}`
+          matchesDecade(song.year, decade) &&
+          `${song.title} ${song.artist} ${song.album} ${song.year || ""}`
             .toLowerCase()
             .includes(query.trim().toLowerCase()),
       ),
-    [songs, query, status, category, region],
+    [songs, query, status, category, region, decade],
   );
-  const available = results.filter((s) => !s.imported && !s.unavailable);
+  const discovered = results.filter(song => matchesDecade(song.year, discoveryDecade) && (!discoveryYear || song.year === discoveryYear));
+  const available = discovered.filter((s) => !s.imported && !s.unavailable);
   function filter(setter, value) {
     setter(value);
     setSelected(new Set());
@@ -305,6 +327,8 @@ export default function AdminPage() {
   function changeSource(which) {
     run(async () => {
       setSource(which);
+      setDiscoveryDecade("all");
+      setDiscoveryYear("");
       setPreview(null);
       setResults([]);
       setImportSelected(new Set());
@@ -468,7 +492,7 @@ export default function AdminPage() {
                   type="search"
                   value={query}
                   onChange={(e) => filter(setQuery, e.target.value)}
-                  placeholder="歌名、歌手或專輯"
+                  placeholder="歌名、歌手、專輯或年份"
                 />
               </label>
               <Select
@@ -489,6 +513,8 @@ export default function AdminPage() {
                 onChange={(v) => filter(setRegion, v)}
                 options={{ all: "所有曲庫", ...regionLabels }}
               />
+              <Select label="題庫年代" value={decade} onChange={v => filter(setDecade, v)}
+                options={{ ...decadeLabels, unknown: "年份未知" }} />
             </div>
             <div className="batch">
               <SelectionCheckbox
@@ -565,6 +591,7 @@ export default function AdminPage() {
                   onSelect={(id, checked) => select(setSelected, id, checked)}
                   onPreview={setPreview}
                   onCategory={(id, category) => patch({ category }, "的演唱分類", [id])}
+                  onYear={(id, year) => patch({ year }, "的發行年份", [id])}
                 />
               ))}
             </div>
@@ -576,6 +603,7 @@ export default function AdminPage() {
             <p className="small muted">
               顯示 {visible.length} / {songs.length} 首，每批最多操作 200 首
             </p>
+            <p className="small muted">年份預設採 Apple 資料；遇到精選輯或再版，可修正為原曲發行年。</p>
           </section>
           <section
             id="discover-panel"
@@ -669,6 +697,17 @@ export default function AdminPage() {
                 </p>
               </>
             )}
+            <div className="discovery-years">
+              <Select label="搜尋結果年代" value={discoveryDecade}
+                onChange={value => { setDiscoveryDecade(value); setDiscoveryYear(""); setImportSelected(new Set()); }}
+                options={{ ...decadeLabels, unknown: "年份未知" }} />
+              <label>指定年份
+                <input type="text" inputMode="numeric" maxLength={4} placeholder="例如 2004" value={discoveryYear}
+                  onChange={event => { setDiscoveryYear(event.target.value.replace(/\D/g, "")); setDiscoveryDecade("all"); setImportSelected(new Set()); }} />
+              </label>
+              <span className="small muted">顯示 {discovered.length} / {results.length} 首</span>
+            </div>
+            <p className="small muted">僅篩選本次結果的發行年份，並非歷年熱門榜。</p>
             <div className="batch">
               <SelectionCheckbox
                 checked={
@@ -732,7 +771,7 @@ export default function AdminPage() {
               {discoveryMessage}
             </p>
             <div className="management-list">
-              {results.map((song) => (
+              {discovered.map((song) => (
                 <SongRow
                   key={song.id}
                   song={song}
@@ -746,6 +785,7 @@ export default function AdminPage() {
                 />
               ))}
             </div>
+            {results.length > 0 && discovered.length === 0 && <p className="empty">沒有符合年份的結果，請調整年代或搜尋其他歌手。</p>}
           </section>
         </fieldset>
       )}

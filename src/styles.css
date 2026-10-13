@@ -1046,6 +1046,13 @@ dialog li {
 .mixes {
   flex-wrap: wrap;
 }
+.decades .mix {
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .decades .mix { flex: 1 1 calc(50% - 8px); }
+}
 .guess-form {
   margin: 28px 0 16px;
 }

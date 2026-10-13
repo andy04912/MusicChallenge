@@ -68,6 +68,15 @@ test('admin authorization, release states, import, and restart persistence', asy
     const live=await (await request('/api/catalog')).json();assert.equal(live.find(s=>s.id===ids[2]).region,'tw');
     assert.ok(live.filter(s=>s.id!==ids[2]).every(s=>s.region==='kr'));
   });
+  await t.test('release year edits validate atomically and are visible in the public catalog',async()=>{
+    const update = year => request('/api/admin/songs',{method:'PATCH',body:JSON.stringify({ids:[ids[2]],year})});
+    assert.equal((await update('2004')).status,200);
+    for (const year of [2004,null,'04','2004x','1899','2099']) assert.equal((await update(year)).status,400);
+    assert.equal((await (await request('/api/catalog')).json()).find(s=>s.id===ids[2]).year,'2004');
+    assert.equal((await update('')).status,200);
+    assert.equal((await (await request('/api/catalog')).json()).find(s=>s.id===ids[2]).year,'');
+    assert.equal((await update('2004')).status,200);
+  });
   await t.test('unpublishing removes songs from the public catalog',async()=>{
     await request('/api/admin/songs',{method:'PATCH',body:JSON.stringify({ids:[ids[0]],status:'archived'})});
     await request('/api/admin/songs',{method:'PATCH',body:JSON.stringify({ids:[ids[1]],status:'draft',category:'other'})});
@@ -108,6 +117,7 @@ test('admin authorization, release states, import, and restart persistence', asy
     assert.equal((await request('/api/admin/session')).status,200);
     const rows=await (await request('/api/admin/songs')).json();assert.equal(rows.length,38);assert.equal(rows.find(s=>s.id===ids[2]).region,'tw');assert.equal(rows.find(s=>s.id===999999).region,'tw');
     assert.equal(rows.find(s=>s.id===ids[0]).status,'archived');assert.equal(rows.find(s=>s.id===ids[1]).category,'other');
+    assert.equal(rows.find(s=>s.id===ids[2]).year,'2004');
     assert.equal((await (await request('/api/catalog')).json()).length,3);
     const response=await request('/api/admin/import',{method:'POST',body:'{"ids":[999999],"categories":{"999999":"girl"}}'});
     assert.deepEqual(await response.json(),{imported:0,skipped:1});

@@ -35,6 +35,15 @@ test("admin session, batch region update, release and logout retain their API co
   const user = userEvent.setup();
   render(<AdminPage />);
   await screen.findByRole("heading", { name: "歌曲管理" });
+  await user.selectOptions(screen.getByRole("combobox", { name: "題庫年代" }), "2020s");
+  expect(screen.queryByRole("checkbox", {name: "選擇 七里香 · 周杰倫"})).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", { name: "題庫年代" }), "2000s");
+  const yearInput = screen.getByRole("textbox", {name: "發行年份 七里香 · 周杰倫"});
+  await user.clear(yearInput);
+  await user.type(yearInput, "2005");
+  await user.click(screen.getByRole("button", {name: "儲存年份 七里香 · 周杰倫"}));
+  await screen.findByText("已更新 1 首歌曲的發行年份。");
+  expect(song.year).toBe("2005");
   await user.click(
     screen.getByRole("checkbox", { name: "選擇 七里香 · 周杰倫" }),
   );
@@ -55,6 +64,39 @@ test("admin session, batch region update, release and logout retain their API co
   await user.click(screen.getByRole("button", { name: "登出" }));
   await screen.findByLabelText("管理員密碼");
   expect(screen.queryByText("七里香")).not.toBeInTheDocument();
+  vi.unstubAllGlobals();
+});
+
+test("discovery year filters clear hidden selections and import only the visible decade", async () => {
+  const calls = [];
+  const rows = ["2004", "2024", ""].map((year, id) => ({id: id + 1, title: `Track ${id}`, artist: "Artist", year, category: "boy", categorySource: "auto"}));
+  vi.stubGlobal("fetch", vi.fn(async (path, options) => {
+    calls.push([path, options]);
+    if (path.endsWith("/session")) return new Response(JSON.stringify({csrf: "test"}));
+    if (path.includes("search?")) return new Response(JSON.stringify(rows));
+    if (path.endsWith("/import")) return new Response(JSON.stringify({imported: 1}));
+    return new Response("[]");
+  }));
+  const user = userEvent.setup(); render(<AdminPage />);
+  await screen.findByRole("heading", {name: "歌曲管理"});
+  await user.click(screen.getByRole("tab", {name: "搜尋 Apple 曲庫"}));
+  await user.type(screen.getByRole("searchbox", {name: "Apple 台灣曲庫"}), "Artist");
+  await user.click(screen.getByRole("button", {name: "搜尋歌曲"}));
+  await screen.findByText("Track 0");
+  await user.click(screen.getByRole("checkbox", {name: "全選可匯入歌曲"}));
+  await user.selectOptions(screen.getByRole("combobox", {name: "搜尋結果年代"}), "2000s");
+  expect(screen.queryByText("Track 1")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", {name: "加入草稿"})).toBeDisabled();
+  await user.type(screen.getByRole("textbox", {name: "指定年份"}), "2024");
+  expect(screen.getByText("Track 1")).toBeVisible();
+  expect(screen.queryByText("Track 0")).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByRole("combobox", {name: "搜尋結果年代"}), "unknown");
+  expect(screen.getByText("Track 2")).toBeVisible();
+  await user.selectOptions(screen.getByRole("combobox", {name: "搜尋結果年代"}), "2000s");
+  await user.click(screen.getByRole("checkbox", {name: "全選可匯入歌曲"}));
+  await user.click(screen.getByRole("button", {name: "加入草稿"}));
+  await waitFor(() => expect(calls.some(([path]) => path.endsWith("/import"))).toBe(true));
+  expect(JSON.parse(calls.find(([path]) => path.endsWith("/import"))[1].body).ids).toEqual([1]);
   vi.unstubAllGlobals();
 });
 

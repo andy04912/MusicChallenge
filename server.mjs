@@ -226,7 +226,11 @@ const server = createServer(async (req, res) => {
           if (!['tw','kr','other'].includes(input.region)) throw fail(400, '歌曲地區不正確。');
           updates.push(['region', input.region]);
         }
-        if (!updates.length && input.category === undefined) throw fail(400, '請指定狀態或分類。');
+        if (input.year !== undefined) {
+          if (typeof input.year !== 'string' || (input.year !== '' && (!/^(19|20)\d{2}$/.test(input.year) || Number(input.year) > new Date().getFullYear() + 1))) throw fail(400, '請輸入有效的四位數發行年份，或留白為未知。');
+          updates.push(['year', input.year]);
+        }
+        if (!updates.length && input.category === undefined) throw fail(400, '請指定狀態、分類或年份。');
         const rows = db.prepare(`SELECT * FROM songs WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
         const changes = rows.map(song => {
           const values = Object.fromEntries(updates);

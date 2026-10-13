@@ -8,6 +8,7 @@ import {
   filterPool,
   isCorrectGuess,
   pointsForTime,
+  decadeLabels,
 } from "../lib/game-logic.js";
 import { appleURL, request } from "../lib/api.js";
 import GuessInput from "../components/GuessInput.jsx";
@@ -36,6 +37,7 @@ export default function GamePage() {
     [error, setError] = useState("");
   const [region, setRegion] = useState("kr"),
     [mix, setMix] = useState("all"),
+    [decade, setDecade] = useState("all"),
     [game, setGame] = useState(emptyGame);
   const clockStart = useRef(null);
   const [startedAt, setStartedAt] = useState(null);
@@ -52,8 +54,8 @@ export default function GamePage() {
     mounted = useRef(false),
     next = useRef(null);
   const pool = useMemo(
-    () => filterPool(catalog, region, mix),
-    [catalog, region, mix],
+    () => filterPool(catalog, region, mix, decade),
+    [catalog, region, mix, decade],
   );
   const artists = useMemo(
     () => [...new Set(pool.map((s) => s.artist))],
@@ -93,7 +95,7 @@ export default function GamePage() {
       const songs = await request("/api/catalog");
       if (!mounted.current) return;
       setCatalog(songs);
-      const current = filterPool(songs, region, mix);
+      const current = filterPool(songs, region, mix, decade);
       if (current.length >= 5) {
         resetClock();
         setGame({
@@ -201,6 +203,15 @@ export default function GamePage() {
                     onClick={() => setMix(value)}
                     disabled={loading}
                   >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="field-label" id="decade-label">挑個年代</span>
+              <div className="mixes decades" role="group" aria-labelledby="decade-label">
+                {Object.entries(decadeLabels).map(([value, label]) => (
+                  <button key={value} className={`mix ${decade === value ? "active" : ""}`}
+                    aria-pressed={decade === value} onClick={() => setDecade(value)} disabled={loading}>
                     {label}
                   </button>
                 ))}

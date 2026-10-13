@@ -7,12 +7,27 @@ export const normalize = (value) =>
     .replace(/[\p{P}\p{Z}\p{S}\s]/gu, "");
 export const songKey = (song) =>
   `${normalize(song.title)}|${normalize(song.artist)}`;
-export const filterPool = (songs, region = "kr", category = "all") =>
+export const decadeLabels = {
+  all: "不限年代",
+  "2000s": "2000–2009",
+  "2010s": "2010–2019",
+  "2020s": "2020–2029",
+};
+export function matchesDecade(year, decade = "all") {
+  if (decade === "all") return true;
+  const known = /^(19|20)\d{2}$/.test(String(year ?? ""));
+  if (decade === "unknown") return !known;
+  if (!known || !Object.hasOwn(decadeLabels, decade)) return false;
+  const start = Number(decade.slice(0, 4));
+  return Number(year) >= start && Number(year) < start + 10;
+}
+export const filterPool = (songs, region = "kr", category = "all", decade = "all") =>
   songs.filter(
     (song) =>
       ["tw", "kr"].includes(region) &&
       song.region === region &&
       !song.categoryReview &&
+      matchesDecade(song.year, decade) &&
       (category === "all" || song.category === category),
   );
 

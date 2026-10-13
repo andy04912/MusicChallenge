@@ -5,6 +5,7 @@ import {
   searchSongs,
   isCorrectGuess,
   pointsForTime,
+  matchesDecade,
 } from "../src/lib/game-logic.js";
 const songs = [
   { id: 1, title: "七里香", artist: "周杰倫", region: "tw", category: "other" },
@@ -31,6 +32,19 @@ const songs = [
     category: "other",
   },
 ];
+test("decades include their exact boundaries and intersect language and voice", () => {
+  const rows = ["1999", "2000", "2009", "2010", "2019", "2020", "2029", "2030", "", null, "2004x"]
+    .map((year, id) => ({ id, year, region: "tw", category: "boy" }));
+  assert.deepEqual(filterPool(rows, "tw", "boy", "2000s").map(s => s.year), ["2000", "2009"]);
+  assert.deepEqual(filterPool(rows, "tw", "boy", "2010s").map(s => s.year), ["2010", "2019"]);
+  assert.deepEqual(filterPool(rows, "tw", "boy", "2020s").map(s => s.year), ["2020", "2029"]);
+  assert.equal(filterPool(rows, "kr", "boy", "2000s").length, 0);
+  assert.equal(filterPool(rows, "tw", "girl", "2000s").length, 0);
+  assert.equal(filterPool(rows, "tw", "boy").length, rows.length);
+  assert.equal(matchesDecade("", "unknown"), true);
+  assert.equal(matchesDecade("2004", "unknown"), false);
+  assert.equal(matchesDecade("2004", "invalid"), false);
+});
 test("region and artist-type filters intersect without including unclassified songs", () => {
   assert.deepEqual(
     filterPool(songs, "tw").map((s) => s.id),
