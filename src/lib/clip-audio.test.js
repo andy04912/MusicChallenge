@@ -1,6 +1,9 @@
 import { test, expect, vi, afterEach } from "vitest";
 import { ClipAudio } from "./clip-audio.js";
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 function setup(duration = 30) {
   const sources = [];
   const context = {
@@ -172,5 +175,26 @@ test("offline decode failure can retry preload successfully", async () => {
   expect(await player.preload()).toEqual({ duration: 30 });
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(context.resume).not.toHaveBeenCalled();
+  player.dispose();
+});
+test("a stalled preview body times out and retries with a fresh signal", async () => {
+  vi.useFakeTimers();
+  const { player, fetchMock } = setup();
+  fetchMock.mockImplementationOnce(async (_url, { signal }) => ({
+    ok: true,
+    arrayBuffer: () =>
+      new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason)),
+      ),
+  }));
+  const loading = player.preload();
+  const timeout = expect(loading).rejects.toMatchObject({
+    name: "TimeoutError",
+  });
+  await vi.advanceTimersByTimeAsync(20_000);
+  await timeout;
+  expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+  expect(await player.preload()).not.toBeNull();
+  expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(false);
   player.dispose();
 });

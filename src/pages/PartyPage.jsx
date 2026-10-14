@@ -1,5 +1,5 @@
 import { timeoutMessage } from "../lib/live-connection.js";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext, useParams } from "react-router";
 import {
   CheckIcon,
@@ -342,13 +342,15 @@ export default function PartyPage() {
       try {
         if (code && !validRoomCode(code))
           throw new Error("邀請連結不完整，請重新掃描 QR Code。");
-        const player = await request("/api/player", { signal: abort.signal });
+        const [player, songs] = await Promise.all([
+          request("/api/player", { signal: abort.signal }),
+          request("/api/catalog", { signal: abort.signal }),
+        ]);
         if (abort.signal.aborted) return;
         setNickname(readPlayerName(player.nickname));
+        setCatalog(songs);
         if (code)
           accept(await request(partyPath(code), { signal: abort.signal }));
-        const songs = await request("/api/catalog", { signal: abort.signal });
-        if (!abort.signal.aborted) setCatalog(songs);
       } catch (err) {
         if (!abort.signal.aborted) setError(err.message);
       } finally {
@@ -486,14 +488,23 @@ export default function PartyPage() {
     status = room?.status,
     me = room?.me,
     players = room?.players || [];
-  const pool = room
-    ? filterPool(
-        catalog,
-        room.settings.region,
-        room.settings.category,
-        room.settings.decade,
-      )
-    : [];
+  const pool = useMemo(
+    () =>
+      room
+        ? filterPool(
+            catalog,
+            room.settings.region,
+            room.settings.category,
+            room.settings.decade,
+          )
+        : [],
+    [
+      catalog,
+      room?.settings?.region,
+      room?.settings?.category,
+      room?.settings?.decade,
+    ],
+  );
   const localhost =
     /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/.test(invite);
   const title = !code

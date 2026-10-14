@@ -20,6 +20,22 @@ export function clearRequestCache() {
   responses.clear();
   inFlight.clear();
 }
+function invalidateMutation(path) {
+  const affects = path.startsWith("/api/admin/")
+    ? (key) => key === "/api/catalog" || key.startsWith("/api/leaderboard?")
+    : path === "/api/player"
+      ? (key) => key === "/api/player" || key.startsWith("/api/leaderboard?")
+      : /\/(?:finish|leave|next|ready)$/.test(path)
+        ? (key) => key.startsWith("/api/leaderboard?")
+        : () => false;
+  for (const key of responses.keys()) if (affects(key)) responses.delete(key);
+  for (const [key, entry] of inFlight) {
+    if (affects(key)) {
+      entry.invalidated = true;
+      inFlight.delete(key);
+    }
+  }
+}
 function saveResponse(path, value) {
   if (responses.size >= 40) responses.delete(responses.keys().next().value);
   responses.set(path, { value, expires: Date.now() + lifetime(path) });
@@ -126,7 +142,8 @@ export async function request(path, options = {}) {
         signal: pending.controller.signal,
       })
         .then((value) => {
-          if (version === generation) saveResponse(path, value);
+          if (version === generation && !pending.invalidated)
+            saveResponse(path, value);
           return value;
         })
         .finally(() => {
@@ -138,11 +155,12 @@ export async function request(path, options = {}) {
     }
     return subscribe(pending, options.signal);
   }
-  if (method !== "GET") clearRequestCache();
+  if (method !== "GET") invalidateMutation(path);
   const value = await fetchJSON(path, options);
   if (method !== "GET") {
-    // Reads that overlapped a mutation must not keep stale rankings/catalogs.
-    clearRequestCache();
+    // Invalidate only data this action can change. Playing/guessing must not
+    // discard the catalog and force every route to download it again.
+    invalidateMutation(path);
     if (path === "/api/player" && method === "PATCH") saveResponse(path, value);
   }
   return value;

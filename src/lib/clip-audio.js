@@ -47,13 +47,29 @@ export class ClipAudio {
   preload() {
     if (this.disposed) return Promise.resolve(null);
     if (this.readyPromise) return this.readyPromise;
+    // A stalled Apple CDN request must expose retry instead of disabling play
+    // forever. A later preload uses a fresh controller after a timeout.
+    this.controller = new AbortController();
+    const controller = this.controller;
     const pending = (async () => {
-      const response = await fetch(this.url, {
-        signal: this.controller.signal,
-        credentials: "omit",
-      });
-      if (!response.ok) throw new Error("Preview unavailable");
-      const bytes = await response.arrayBuffer();
+      const timer = setTimeout(
+        () =>
+          controller.abort(
+            new DOMException("Preview timed out", "TimeoutError"),
+          ),
+        20_000,
+      );
+      let bytes;
+      try {
+        const response = await fetch(this.url, {
+          signal: controller.signal,
+          credentials: "omit",
+        });
+        if (!response.ok) throw new Error("Preview unavailable");
+        bytes = await response.arrayBuffer();
+      } finally {
+        clearTimeout(timer);
+      }
       if (this.disposed) return null;
       this.bytes = bytes;
       // Offline decoding prepares audio without opening an output device.

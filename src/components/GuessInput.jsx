@@ -4,7 +4,7 @@ import {
   CaretLeftIcon,
   CaretRightIcon,
 } from "@phosphor-icons/react";
-import { normalize, searchSongs } from "../lib/game-logic.js";
+import { exactSong, normalize, searchSongs } from "../lib/game-logic.js";
 
 export default function GuessInput({
   songs,
@@ -95,11 +95,12 @@ export default function GuessInput({
     };
   }
   function change(value) {
-    setText(value);
-    setSelected(null);
+    const match = !composing.current ? exactSong(songs, value) : null;
+    setText(match?.title || value);
+    setSelected(match);
     setActive(-1);
     setPage(0);
-    setOpen(!composing.current);
+    setOpen(!composing.current && !match);
   }
   function keyDown(event) {
     if (

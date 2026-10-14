@@ -93,7 +93,15 @@ export default function GamePage() {
         ).map((song) => [songKey(song), song]),
       ).values(),
     ],
-    [catalog, run, region, category, decade],
+    [
+      catalog,
+      run?.settings.region,
+      run?.settings.category,
+      run?.settings.decade,
+      region,
+      category,
+      decade,
+    ],
   );
   const classicRounds = Math.min(5, pool.length);
   const gameActive = !!run && run.status !== "finished";

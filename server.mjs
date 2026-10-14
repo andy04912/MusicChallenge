@@ -133,7 +133,9 @@ function fromApple(song, category = 'other', region = 'other') {
   return { ...row, ...classifySong(row) };
 }
 const getChart = createCharts({ lookup: async ids => (await apple('/lookup', { id: ids.join(','), limit: '200' })).map(song => fromApple(song)).filter(Boolean) });
-const gameplay = createGameplayHandler({ db, body, json, sameOrigin, production, getPublishedSongs: () => db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all().filter(song => !excludedVersionReason(song)) });
+const publishedQuery = db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`);
+const getPublishedSongs = () => publishedQuery.all().filter(song => !excludedVersionReason(song));
+const gameplay = createGameplayHandler({ db, body, json, sameOrigin, production, getPublishedSongs });
 const serveStatic = process.env.SERVE_STATIC !== 'false';
 const staticFiles = new Map(serveStatic ? [
   ['/', 'index.html'], ['/index.html', 'index.html'], ['/admin', 'index.html'], ['/admin/', 'index.html'], ['/leaderboard', 'index.html'], ['/duel', 'index.html'], ['/party', 'index.html']
@@ -164,7 +166,9 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost'), path = url.pathname, method = req.method;
     if (method === 'GET' && path === '/api/health') return json(res, 200, { ok: true });
     if (await gameplay.handle(req, res, url)) return;
-    if (method === 'GET' && path === '/api/catalog') return json(res, 200, db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`).all().filter(song => !excludedVersionReason(song)));
+    // Setup and autocomplete need searchable metadata only. Audio/artwork and
+    // store links arrive with the current round/revealed answer, not 558 songs.
+    if (method === 'GET' && path === '/api/catalog') return json(res, 200, getPublishedSongs().map(({ id, title, artist, year, category, region }) => ({ id, title, artist, year, category, region })));
     if (path === '/api/admin/login' && method === 'POST') {
       sameOrigin(req);
       // Do not trust spoofable forwarding headers. A reverse proxy shares this budget.

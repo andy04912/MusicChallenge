@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -147,8 +147,16 @@ test(
       })
     ).json();
     assert.equal(room.status, "playing");
-    const catalog = await (await request("/api/catalog")).json(),
-      target = catalog.find((song) => song.preview === room.preview.preview);
+    const catalog = await (await request("/api/catalog")).json();
+    assert.ok(
+      catalog.every((song) => !("preview" in song) && !("artwork" in song)),
+    );
+    const fixtures = JSON.parse(
+      await readFile(new URL("../seeds/catalog.json", import.meta.url), "utf8"),
+    );
+    const target = fixtures.find(
+      (song) => song.preview === room.preview.preview,
+    );
     assert.ok(target);
     await Promise.all(
       players.slice(0, 50).map(async (p) => {
@@ -204,15 +212,13 @@ test(
       }),
     );
     const responses = await Promise.all(
-      players
-        .slice(0, 50)
-        .map((p) =>
-          request(`/api/parties/${room.code}/guess`, p.cookie, "POST", {
-            roundId: room.roundId,
-            answer: target.title,
-            score: 999999,
-          }),
-        ),
+      players.slice(0, 50).map((p) =>
+        request(`/api/parties/${room.code}/guess`, p.cookie, "POST", {
+          roundId: room.roundId,
+          answer: target.title,
+          score: 999999,
+        }),
+      ),
     );
     assert.ok(responses.every((r) => r.status === 200));
     const guesses = await Promise.all(responses.map((r) => r.json()));
