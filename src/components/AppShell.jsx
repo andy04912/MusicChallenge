@@ -160,7 +160,7 @@ export default function AppShell() {
         <InstallApp allowed={!admin && !gameActive} />
         <a
           className="donate-link"
-          href="https://portaly.cc/bradydamove/support"
+          href="https://portaly.cc/bradydamove"
           target="_blank"
           rel="noopener noreferrer"
         >

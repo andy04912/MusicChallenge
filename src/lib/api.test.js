@@ -141,3 +141,26 @@ test("a mutation times out without automatically submitting it twice", async () 
   await timedOut;
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+test("leaving the last subscriber cancels the underlying request and permits a fresh route read", async () => {
+  vi.useFakeTimers();
+  const fetch = vi.fn(
+    (_url, { signal }) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason));
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const route = new AbortController();
+  const pending = request("/api/catalog", { signal: route.signal });
+  const cancelled = expect(pending).rejects.toMatchObject({
+    name: "AbortError",
+  });
+  route.abort();
+  await cancelled;
+  await vi.advanceTimersByTimeAsync(251);
+  expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
+  fetch.mockResolvedValueOnce(json([{ id: 2 }]));
+  expect(await request("/api/catalog")).toEqual([{ id: 2 }]);
+  expect(fetch).toHaveBeenCalledTimes(2);
+});

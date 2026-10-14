@@ -29,15 +29,39 @@ function cancelled(signal) {
 }
 // Leaving one route cancels that subscriber, not a shared read needed by the
 // next route. This also avoids duplicate guest creation during quick switching.
-function subscribe(promise, signal) {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(cancelled(signal));
+function subscribe(entry, signal) {
+  if (signal?.aborted) return Promise.reject(cancelled(signal));
   return new Promise((resolve, reject) => {
-    const abort = () => reject(cancelled(signal));
-    signal.addEventListener("abort", abort, { once: true });
-    promise
-      .then(resolve, reject)
-      .finally(() => signal.removeEventListener("abort", abort));
+    const consumer = {};
+    entry.consumers.add(consumer);
+    clearTimeout(entry.releaseTimer);
+    const release = () => {
+      signal?.removeEventListener("abort", abort);
+      entry.consumers.delete(consumer);
+      if (!entry.settled && !entry.consumers.size) {
+        clearTimeout(entry.releaseTimer);
+        // Allow the next route to adopt this read; otherwise abort the actual
+        // network request, freeing a browser connection slot promptly.
+        entry.releaseTimer = setTimeout(() => {
+          if (!entry.consumers.size) entry.controller.abort();
+        }, 250);
+      }
+    };
+    const abort = () => {
+      release();
+      reject(cancelled(signal));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    entry.promise.then(
+      (value) => {
+        release();
+        resolve(value);
+      },
+      (error) => {
+        release();
+        reject(error);
+      },
+    );
   });
 }
 async function fetchJSON(path, options) {
@@ -90,14 +114,24 @@ export async function request(path, options = {}) {
     const cached = cachedResponse(path);
     if (cached !== undefined) return cached;
     let pending = inFlight.get(path);
-    if (!pending) {
+    if (!pending || pending.controller.signal.aborted) {
       const version = generation;
-      pending = fetchJSON(path, { ...options, signal: undefined })
+      pending = {
+        controller: new AbortController(),
+        consumers: new Set(),
+        settled: false,
+      };
+      pending.promise = fetchJSON(path, {
+        ...options,
+        signal: pending.controller.signal,
+      })
         .then((value) => {
           if (version === generation) saveResponse(path, value);
           return value;
         })
         .finally(() => {
+          pending.settled = true;
+          clearTimeout(pending.releaseTimer);
           if (inFlight.get(path) === pending) inFlight.delete(path);
         });
       inFlight.set(path, pending);

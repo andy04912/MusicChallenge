@@ -1,11 +1,20 @@
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router";
 import AppShell from "./AppShell.jsx";
 import GamePage from "../pages/GamePage.jsx";
 import DuelPage from "../pages/DuelPage.jsx";
 import PartyPage from "../pages/PartyPage.jsx";
 import LeaderboardPage from "../pages/LeaderboardPage.jsx";
+vi.mock("qrcode", () => ({
+  default: { toDataURL: async () => "data:image/png;base64,test" },
+}));
 
 let fetch;
 beforeEach(() => {
@@ -55,6 +64,7 @@ function app() {
           <Route index element={<GamePage />} />
           <Route path="duel" element={<DuelPage />} />
           <Route path="party" element={<PartyPage />} />
+          <Route path="party/:code" element={<PartyPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
         </Route>
       </Routes>
@@ -133,4 +143,82 @@ test("a stalled initial load exits the spinner with an actionable retry", async 
     "Recovered",
   );
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("create party then immediately navigate to duel closes the old stream and loads the new setup", async () => {
+  const normal = fetch.getMockImplementation(),
+    streams = [];
+  vi.stubGlobal(
+    "EventSource",
+    class {
+      close = vi.fn();
+      handlers = {};
+      constructor(url) {
+        this.url = url;
+        streams.push(this);
+      }
+      addEventListener(name, callback) {
+        this.handlers[name] = callback;
+      }
+    },
+  );
+  const party = {
+    code: "P123456789012345",
+    status: "lobby",
+    isHost: true,
+    host: { id: "player", nickname: "Tester" },
+    hostId: "player",
+    round: 1,
+    roundId: "round",
+    players: [],
+    capacity: 50,
+    preview: null,
+    settings: { region: "kr", category: "all", decade: "all" },
+  };
+  fetch.mockImplementation((path, options) =>
+    path.startsWith("/api/parties")
+      ? Promise.resolve(new Response(JSON.stringify(party)))
+      : normal(path, options),
+  );
+  app();
+  await screen.findByDisplayValue("Tester");
+  fireEvent.click(screen.getByRole("link", { name: "派對", exact: true }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "建立派對・顯示 QR Code" }),
+  );
+  await screen.findByRole("heading", { name: "讓朋友一起加入" });
+  await waitFor(() => expect(streams).toHaveLength(1));
+  fireEvent.click(screen.getByRole("link", { name: "好友對戰", exact: true }));
+  expect(streams[0].close).toHaveBeenCalledTimes(1);
+  await screen.findByRole("textbox", { name: "你的暱稱" });
+  act(() => streams[0].handlers.state({ data: JSON.stringify(party) }));
+  fireEvent.click(screen.getByRole("button", { name: "選擇曲庫" }));
+  expect(screen.getByRole("group", { name: "曲庫" })).toBeInTheDocument();
+  expect(screen.queryByText("連線逾時")).not.toBeInTheDocument();
+});
+
+test("leaving during party creation aborts the old operation and cannot redirect the next page", async () => {
+  const normal = fetch.getMockImplementation();
+  let createSignal;
+  fetch.mockImplementation((path, options) => {
+    if (path === "/api/parties")
+      return new Promise((_resolve, reject) => {
+        createSignal = options.signal;
+        createSignal.addEventListener("abort", () =>
+          reject(createSignal.reason),
+        );
+      });
+    return normal(path, options);
+  });
+  app();
+  await screen.findByDisplayValue("Tester");
+  fireEvent.click(screen.getByRole("link", { name: "派對", exact: true }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "建立派對・顯示 QR Code" }),
+  );
+  await waitFor(() => expect(createSignal).toBeDefined());
+  fireEvent.click(screen.getByRole("link", { name: "好友對戰", exact: true }));
+  expect(createSignal.aborted).toBe(true);
+  await screen.findByRole("textbox", { name: "你的暱稱" });
+  expect(screen.queryByText("正在連接派對…")).not.toBeInTheDocument();
 });

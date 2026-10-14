@@ -1,3 +1,4 @@
+import { timeoutMessage } from "../lib/live-connection.js";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext, useParams } from "react-router";
 import {
@@ -278,6 +279,9 @@ export default function PartyPage() {
   const { code } = useParams(),
     navigate = useNavigate(),
     { setGameActive, showHelp } = useOutletContext() || {};
+  const operation = useRef(null);
+  const [connectionExpired, setConnectionExpired] = useState("");
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
   const [room, setRoom] = useState(null),
     [catalog, setCatalog] = useState(
       () => cachedResponse("/api/catalog") || [],
@@ -324,6 +328,8 @@ export default function PartyPage() {
   useEffect(() => {
     mounted.current = true;
     const abort = new AbortController();
+    const actions = new AbortController();
+    operation.current = actions;
     setLoading(
       !!code ||
         !cachedResponse("/api/catalog") ||
@@ -362,9 +368,10 @@ export default function PartyPage() {
       .catch(() => {});
     return () => {
       mounted.current = false;
+      actions.abort();
       abort.abort();
     };
-  }, [code]);
+  }, [code, connectionAttempt]);
   const member = !!(room?.isHost || room?.me),
     active = member && room?.status === "playing";
   useEffect(() => {
@@ -373,8 +380,9 @@ export default function PartyPage() {
   }, [active, setGameActive]);
   useEffect(() => {
     if (!code || !member || room?.status === "finished") return;
-    return subscribeParty(code, accept, setConnected);
-  }, [code, member, room?.status === "finished"]);
+    setConnectionExpired("");
+    return subscribeParty(code, accept, setConnected, setConnectionExpired);
+  }, [code, member, room?.status === "finished", connectionAttempt]);
   useEffect(() => {
     if (room?.status === "finished") setEnding(false);
   }, [room?.status]);
@@ -407,17 +415,23 @@ export default function PartyPage() {
   }, [invite, room?.isHost]);
   async function action(name, body = {}) {
     if (pending.current || !current.current) return false;
+    const signal = operation.current.signal;
     pending.current = true;
     setBusy(true);
     setError("");
     try {
-      accept(await partyAction(current.current, name, body));
+      accept(
+        await partyAction(current.current, name, body, {
+          signal,
+        }),
+      );
       if (name === "guess") setAttempt((value) => value + 1);
       return true;
     } catch (err) {
+      if (signal.aborted || !mounted.current) return false;
       if (mounted.current) setError(err.message);
       try {
-        accept(await request(partyPath(code)));
+        accept(await request(partyPath(code), { signal }));
       } catch {}
       return false;
     } finally {
@@ -427,23 +441,31 @@ export default function PartyPage() {
   }
   async function enter(create) {
     if (pending.current || !nickname.trim()) return;
+    const signal = operation.current.signal;
     pending.current = true;
     setBusy(true);
     setError("");
     try {
       savePlayerName(nickname.trim());
       await request("/api/player", {
+        signal,
         method: "PATCH",
         body: JSON.stringify({ nickname: nickname.trim() }),
       });
+      if (!mounted.current) return;
       const next = await request(
         create ? "/api/parties" : partyPath(code, "join"),
-        { method: "POST", body: JSON.stringify(create ? settings : {}) },
+        {
+          signal,
+          method: "POST",
+          body: JSON.stringify(create ? settings : {}),
+        },
       );
       if (!mounted.current) return;
       if (create) navigate(`/party/${next.code}`, { replace: true });
       else accept(next);
     } catch (err) {
+      if (signal.aborted || !mounted.current) return false;
       if (mounted.current) setError(err.message);
     } finally {
       pending.current = false;
@@ -572,7 +594,21 @@ export default function PartyPage() {
           {error}
         </p>
       )}
-      {!connected && member && status !== "finished" && (
+      {connectionExpired && !["finished", "closed"].includes(status) && (
+        <p role="alert" className="party-error">
+          {connectionExpired}
+          <button
+            className="text-button"
+            onClick={() => {
+              setConnectionExpired("");
+              setConnectionAttempt((value) => value + 1);
+            }}
+          >
+            重新連線
+          </button>
+        </p>
+      )}
+      {!connected && !connectionExpired && member && status !== "finished" && (
         <p className="party-network-note" role="status">
           正在重新連線，作答與分數已保留。
         </p>
@@ -707,6 +743,11 @@ export default function PartyPage() {
         </form>
       ) : status === "finished" ? (
         <div className="party-finished">
+          {room.endReason && (
+            <p role="status" className="party-network-note">
+              {timeoutMessage(room.endReason, "party")}
+            </p>
+          )}
           <PartyPodium
             players={players.map((player) => ({
               ...player,
