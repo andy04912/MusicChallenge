@@ -14,25 +14,84 @@ const shuffle = (input) => {
   return copy;
 };
 const newRoundId = () => randomBytes(15).toString("base64url");
+export const ROOM_TIMEOUTS = { idleMs: 10 * 60_000, offlineMs: 2 * 60_000 };
+// Presence is process-local. After a restart allow two minutes to reconnect,
+// while the persisted activity timestamp still enforces the idle deadline.
+export function roomTimeouts(listeners, now, policy = ROOM_TIMEOUTS) {
+  const bootAt = now(),
+    missing = new Map();
+  const key = (id, player) => `${id}:${player}`;
+  return {
+    connected(id, player) {
+      missing.delete(key(id, player));
+    },
+    disconnected(id, player) {
+      if (!listeners.get(id)?.get(player)?.size)
+        missing.set(key(id, player), now());
+    },
+    track(s) {
+      for (const id of s.kind === "party"
+        ? [s.host.id]
+        : s.members.map((m) => m.id)) {
+        if (!listeners.get(s.id)?.get(id)?.size && !missing.has(key(s.id, id)))
+          missing.set(key(s.id, id), now());
+      }
+    },
+    reason(s) {
+      if (["finished", "closed"].includes(s.status)) return null;
+      if (now() - (s.lastActivityAt ?? s.createdAt) >= policy.idleMs)
+        return "idle";
+      const required =
+        s.kind === "party" ? [s.host.id] : s.members.map((m) => m.id);
+      if (
+        required.some(
+          (id) =>
+            !listeners.get(s.id)?.get(id)?.size &&
+            now() -
+              (missing.get(key(s.id, id)) ?? Math.max(bootAt, s.createdAt)) >=
+              policy.offlineMs,
+        )
+      )
+        return "disconnected";
+      return null;
+    },
+    forget(id) {
+      for (const k of missing.keys())
+        if (k.startsWith(`${id}:`)) missing.delete(k);
+    },
+    clear() {
+      missing.clear();
+    },
+  };
+}
 export function createPartyService({
   db,
   getPublishedSongs,
   now = () => Date.now(),
+  timeouts = ROOM_TIMEOUTS,
 }) {
   db.exec(
     "CREATE TABLE IF NOT EXISTS game_states(id TEXT PRIMARY KEY,kind TEXT NOT NULL,value TEXT NOT NULL,updatedAt INTEGER NOT NULL)",
   );
   const listeners = new Map();
+  const deadlines = roomTimeouts(listeners, now, timeouts);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS game_room_status ON game_states(kind, json_extract(value, '$.status'))",
+  );
   const save = (s) =>
     db
       .prepare("INSERT OR REPLACE INTO game_states VALUES (?,?,?,?)")
       .run(s.id, "party", JSON.stringify(s), now());
   const read = (id) => {
     const row = db
-      .prepare("SELECT value FROM game_states WHERE id=? AND kind='party'")
+      .prepare(
+        "SELECT value,updatedAt FROM game_states WHERE id=? AND kind='party'",
+      )
       .get(id);
     if (!row) throw fail(404, "找不到派對房間。");
-    return JSON.parse(row.value);
+    const state = JSON.parse(row.value);
+    state.lastActivityAt ??= row.updatedAt;
+    return state;
   };
   const member = (s, p) => s.members.find((m) => m.id === p.id);
   const access = (s, p) => {
@@ -98,6 +157,7 @@ export function createPartyService({
             : publicSong
           : null,
       endedBy: authorized ? s.endedBy || null : null,
+      endReason: s.endReason || null,
     };
   }
   function emit(s, onlyPlayer = null) {
@@ -110,6 +170,7 @@ export function createPartyService({
     let state;
     try {
       state = fn();
+      state.lastActivityAt = now();
       save(state);
       db.exec("COMMIT");
     } catch (error) {
@@ -117,6 +178,7 @@ export function createPartyService({
       throw error;
     }
     emit(state, recipient());
+    if (state.status === "finished") deadlines.forget(id);
     return state;
   }
   function create(p, input = {}) {
@@ -163,11 +225,14 @@ export function createPartyService({
       cursor: 0,
       history: [],
       createdAt: now(),
+      lastActivityAt: now(),
     };
     save(state);
+    deadlines.track(state);
     return view(state, p);
   }
   function join(id, p) {
+    expire(id);
     const original = read(id);
     if (p.id === original.host.id || member(original, p))
       return view(original, p);
@@ -212,6 +277,7 @@ export function createPartyService({
     s.status = "revealed";
   }
   function mutate(id, p, action, input = {}) {
+    expire(id);
     let notifyOnly = null;
     const state = transaction(
       id,
@@ -348,6 +414,7 @@ export function createPartyService({
     };
   }
   function canSubscribe(id, p) {
+    expire(id);
     const s = read(id);
     access(s, p);
     if ((listeners.get(id)?.get(p.id)?.size || 0) >= 4)
@@ -355,7 +422,11 @@ export function createPartyService({
     return view(s, p);
   }
   function subscribe(id, p, callback) {
-    canSubscribe(id, p);
+    const snapshot = canSubscribe(id, p);
+    if (snapshot.status === "finished") {
+      callback(snapshot);
+      return () => {};
+    }
     const state = read(id),
       wasConnected = !!listeners.get(id)?.get(state.host.id)?.size;
     let room = listeners.get(id);
@@ -369,6 +440,7 @@ export function createPartyService({
       room.set(p.id, set);
     }
     set.add(callback);
+    deadlines.connected(id, p.id);
     if (p.id === state.host.id && !wasConnected) emit(state);
     else callback(view(state, p));
     let active = true;
@@ -378,8 +450,31 @@ export function createPartyService({
       set.delete(callback);
       if (!set.size) room.delete(p.id);
       if (!room.size) listeners.delete(id);
-      if (p.id === state.host.id && !room.has(p.id)) emit(read(id));
+      const latest = read(id);
+      if (latest.status !== "finished") deadlines.disconnected(id, p.id);
+      if (p.id === state.host.id && !room.has(p.id)) emit(latest);
     };
+  }
+  function expire(id) {
+    const state = read(id),
+      reason = deadlines.reason(state);
+    if (!reason) return;
+    transaction(id, () => {
+      if (state.status === "playing") settle(state);
+      state.status = "finished";
+      state.endReason = reason;
+      state.endedBy = { id: "system", nickname: "系統" };
+      state.revision++;
+      return state;
+    });
+  }
+  function sweep() {
+    for (const { id } of db
+      .prepare(
+        "SELECT id FROM game_states WHERE kind='party' AND json_extract(value, '$.status') IN ('lobby','ready','playing','revealed')",
+      )
+      .all())
+      expire(id);
   }
   return {
     create,
@@ -388,7 +483,14 @@ export function createPartyService({
     resultData,
     canSubscribe,
     subscribe,
-    get: (id, p) => view(read(id), p),
-    close: () => listeners.clear(),
+    sweep,
+    get: (id, p) => {
+      expire(id);
+      return view(read(id), p);
+    },
+    close: () => {
+      listeners.clear();
+      deadlines.clear();
+    },
   };
 }

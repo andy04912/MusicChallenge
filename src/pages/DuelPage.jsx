@@ -1,3 +1,4 @@
+import { timeoutMessage } from "../lib/live-connection.js";
 import { useEffect, useRef, useState } from "react";
 import LoadingState from "../components/LoadingState.jsx";
 import {
@@ -130,6 +131,9 @@ export default function DuelPage() {
   const [search] = useSearchParams();
   const code = pathCode || search.get("room") || "";
   const navigate = useNavigate();
+  const operation = useRef(null);
+  const [connectionExpired, setConnectionExpired] = useState("");
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
   const [room, setRoom] = useState(null),
     [catalog, setCatalog] = useState(
       () => cachedResponse("/api/catalog") || [],
@@ -175,6 +179,8 @@ export default function DuelPage() {
   useEffect(() => {
     mounted.current = true;
     const abort = new AbortController();
+    const actions = new AbortController();
+    operation.current = actions;
     setLoading(
       !!code ||
         !cachedResponse("/api/catalog") ||
@@ -203,9 +209,10 @@ export default function DuelPage() {
     void load();
     return () => {
       mounted.current = false;
+      actions.abort();
       abort.abort();
     };
-  }, [code]);
+  }, [code, connectionAttempt]);
   const member = Boolean(room?.me);
   const gameActive = member && ["playing", "revealed"].includes(room?.status);
   const endAckKey =
@@ -235,8 +242,15 @@ export default function DuelPage() {
   useEffect(() => {
     if (!code || !member || ["finished", "closed"].includes(room?.status))
       return;
-    return subscribeRoom(code, accept, setConnected);
-  }, [code, member, room?.status === "closed", room?.status === "finished"]);
+    setConnectionExpired("");
+    return subscribeRoom(code, accept, setConnected, setConnectionExpired);
+  }, [
+    code,
+    member,
+    room?.status === "closed",
+    room?.status === "finished",
+    connectionAttempt,
+  ]);
   useEffect(() => {
     duration.current = 30;
     setLeaving(false);
@@ -279,19 +293,25 @@ export default function DuelPage() {
   }
   async function action(name, data = {}) {
     if (pending.current || !stateRef.current?.me) return;
+    const signal = operation.current.signal;
     pending.current = true;
     setBusy(true);
     setError("");
     try {
-      accept(await roomAction(stateRef.current, name, data));
+      accept(
+        await roomAction(stateRef.current, name, data, {
+          signal,
+        }),
+      );
       return true;
     } catch (err) {
+      if (signal.aborted || !mounted.current) return false;
       if (mounted.current) {
         if (name === "leave" || name === "finish") setLeaveError(err.message);
         else setError(err.message);
       }
       try {
-        accept(await request(roomPath(code)));
+        accept(await request(roomPath(code), { signal }));
       } catch {
         /* Keep the last snapshot for a reconnection attempt. */
       }
@@ -303,25 +323,34 @@ export default function DuelPage() {
   }
   async function enter(create) {
     if (pending.current || !nickname.trim()) return;
+    const signal = operation.current.signal;
     pending.current = true;
     setBusy(true);
     setError("");
     savePlayerName(nickname.trim());
     try {
       await request("/api/player", {
+        signal,
         method: "PATCH",
         body: JSON.stringify({ nickname: nickname.trim() }),
       });
+      if (!mounted.current) return;
       const next = create
         ? await request("/api/rooms", {
+            signal,
             method: "POST",
             body: JSON.stringify(settings),
           })
-        : await request(roomPath(code, "join"), { method: "POST", body: "{}" });
+        : await request(roomPath(code, "join"), {
+            signal,
+            method: "POST",
+            body: "{}",
+          });
       if (!mounted.current) return;
       if (create) navigate(`/duel/${next.code}`, { replace: true });
       else accept(next);
     } catch (err) {
+      if (signal.aborted || !mounted.current) return false;
       if (mounted.current) setError(err.message);
     } finally {
       pending.current = false;
@@ -392,11 +421,28 @@ export default function DuelPage() {
           {error}
         </p>
       )}
-      {!connected && member && !["closed", "finished"].includes(status) && (
-        <p className="duel-connection" role="status">
-          <WifiSlashIcon /> 正在重新連線，進度已保留。
+      {connectionExpired && !["finished", "closed"].includes(status) && (
+        <p role="alert" className="duel-error">
+          {connectionExpired}
+          <button
+            className="text-button"
+            onClick={() => {
+              setConnectionExpired("");
+              setConnectionAttempt((value) => value + 1);
+            }}
+          >
+            重新連線
+          </button>
         </p>
       )}
+      {!connected &&
+        !connectionExpired &&
+        member &&
+        !["closed", "finished"].includes(status) && (
+          <p className="duel-connection" role="status">
+            <WifiSlashIcon /> 正在重新連線，進度已保留。
+          </p>
+        )}
       {loading ? (
         <LoadingState label="連接房間中…" />
       ) : !code ? (
@@ -814,7 +860,8 @@ export default function DuelPage() {
         <span className="duel-modal-eyebrow">CHALLENGE COMPLETE</span>
         <h2 id="duel-ended-title">對戰已結束</h2>
         <p id="duel-ended-description">
-          {room?.endedBy?.nickname || "對手"} 已結束對戰，請查看分數。
+          {timeoutMessage(room?.endReason, "duel") ||
+            `${room?.endedBy?.nickname || "對手"} 已結束對戰，請查看分數。`}
         </p>
         <div>
           <button

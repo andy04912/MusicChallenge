@@ -1,6 +1,10 @@
 import { randomBytes, createHash, randomInt } from "node:crypto";
 import { networkInterfaces } from "node:os";
-import { createPartyService } from "./party-service.mjs";
+import {
+  createPartyService,
+  roomTimeouts,
+  ROOM_TIMEOUTS,
+} from "./party-service.mjs";
 
 export function partyJoinOrigins(
   req,
@@ -106,6 +110,7 @@ export function createGameService({
   db,
   getPublishedSongs,
   now = () => Date.now(),
+  timeouts = ROOM_TIMEOUTS,
 }) {
   db.exec(
     `CREATE TABLE IF NOT EXISTS game_players(id TEXT PRIMARY KEY,tokenHash TEXT UNIQUE NOT NULL,nickname TEXT NOT NULL); CREATE TABLE IF NOT EXISTS game_states(id TEXT PRIMARY KEY,kind TEXT NOT NULL,value TEXT NOT NULL,updatedAt INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS game_scores(id TEXT PRIMARY KEY,playerId TEXT NOT NULL,nickname TEXT NOT NULL,mode TEXT NOT NULL,region TEXT NOT NULL,decade TEXT NOT NULL,category TEXT NOT NULL,score INTEGER NOT NULL,correct INTEGER NOT NULL,played INTEGER NOT NULL,createdAt INTEGER NOT NULL);`,
@@ -115,7 +120,8 @@ export function createGameService({
     value TEXT NOT NULL, UNIQUE(sessionId, playerId)
   );`);
   const listeners = new Map();
-  const party = createPartyService({ db, getPublishedSongs, now });
+  const deadlines = roomTimeouts(listeners, now, timeouts);
+  const party = createPartyService({ db, getPublishedSongs, now, timeouts });
   const digest = (value) => createHash("sha256").update(value).digest("hex");
   const save = (s) => {
     s.history = s.history.slice(s.kind === "room" ? -100 : -50);
@@ -124,9 +130,12 @@ export function createGameService({
       .run(s.id, s.kind, JSON.stringify(s), now());
   };
   const read = (id, allowParty = false) => {
-    const row = db.prepare("SELECT value FROM game_states WHERE id=?").get(id);
+    const row = db
+      .prepare("SELECT value,updatedAt FROM game_states WHERE id=?")
+      .get(id);
     if (!row) throw fail(404, "找不到這場遊戲。");
     const state = JSON.parse(row.value);
+    state.lastActivityAt ??= row.updatedAt;
     if (state.kind === "party" && !allowParty)
       throw fail(404, "找不到這場遊戲。");
     // Upgrade active games created before counters were stored independently.
@@ -215,8 +224,10 @@ export function createGameService({
       members: [{ ...p, ...fresh() }],
       history: [],
       createdAt: now(),
+      lastActivityAt: now(),
     };
     save(state);
+    if (kind === "room") deadlines.track(state);
     return view(state, p.id);
   }
   function song(s) {
@@ -295,6 +306,7 @@ export function createGameService({
       hostId: s.hostId,
       closedBy: s.closedBy || null,
       endedBy: s.endedBy || null,
+      endReason: s.endReason || null,
       me: mine ? visible(mine) : null,
       players: s.members.map((m) => ({
         id: m.id,
@@ -324,6 +336,7 @@ export function createGameService({
       for (const callback of callbacks) callback(view(s, id));
   }
   function write(s) {
+    s.lastActivityAt = now();
     s.revision++;
     save(s);
   }
@@ -339,6 +352,7 @@ export function createGameService({
       throw error;
     }
     emit(read(id));
+    if (read(id).status === "finished") deadlines.forget(id);
     return result;
   }
   function scoreRecord(s, m) {
@@ -505,14 +519,27 @@ export function createGameService({
     if (s.status !== "waiting" || s.members.length >= 2)
       throw fail(409, "房間已滿或已結束。");
     s.members.push({ ...p, ...fresh() });
+    deadlines.track(s);
     s.status = "playing";
     write(s);
     return view(s, p.id);
   }
-  function subscribe(id, p, callback) {
+  function canSubscribe(id, p) {
+    expire(id);
     const s = read(id);
     if (s.kind !== "room") throw fail(404, "找不到房間。");
     member(s, p.id);
+    if ((listeners.get(id)?.get(p.id)?.size || 0) >= 4)
+      throw fail(429, "此玩家已開啟太多對戰連線。");
+    return view(s, p.id);
+  }
+  function subscribe(id, p, callback) {
+    const snapshot = canSubscribe(id, p);
+    if (snapshot.status === "finished") {
+      callback(snapshot);
+      return () => {};
+    }
+    const s = read(id);
     let room = listeners.get(id);
     if (!room) {
       room = new Map();
@@ -524,6 +551,7 @@ export function createGameService({
       room.set(p.id, set);
     }
     set.add(callback);
+    deadlines.connected(id, p.id);
     emit(s);
     let subscribed = true;
     return () => {
@@ -532,8 +560,30 @@ export function createGameService({
       set.delete(callback);
       if (!set.size) room.delete(p.id);
       if (!room.size) listeners.delete(id);
-      emit(read(id));
+      const latest = read(id);
+      if (latest.status !== "finished") deadlines.disconnected(id, p.id);
+      emit(latest);
     };
+  }
+  function expire(id) {
+    const state = read(id);
+    if (state.kind !== "room") return;
+    const reason = deadlines.reason(state);
+    if (!reason) return;
+    atomic(() => {
+      endRoom(state, { id: "system", nickname: "系統" });
+      state.endReason = reason;
+      write(state);
+    }, id);
+  }
+  function sweep() {
+    for (const { id } of db
+      .prepare(
+        "SELECT id FROM game_states WHERE kind='room' AND json_extract(value, '$.status') IN ('waiting','playing','revealed')",
+      )
+      .all())
+      expire(id);
+    party.sweep();
   }
   function leaderboard({
     mode = "classic",
@@ -675,16 +725,27 @@ export function createGameService({
     player,
     rename,
     create,
-    mutate: (id, p, action, input) =>
-      atomic(() => mutate(id, p, action, input), id),
-    join: (id, p) => atomic(() => join(id, p), id),
+    mutate: (id, p, action, input) => {
+      expire(id);
+      return atomic(() => mutate(id, p, action, input), id);
+    },
+    join: (id, p) => {
+      expire(id);
+      return atomic(() => join(id, p), id);
+    },
+    canSubscribe,
     subscribe,
+    sweep,
     leaderboard,
     result,
     createResult,
-    get: (id, p) => view(read(id), p.id),
+    get: (id, p) => {
+      expire(id);
+      return view(read(id), p.id);
+    },
     close: () => {
       listeners.clear();
+      deadlines.clear();
       party.close();
     },
   };
@@ -697,10 +758,75 @@ export function createGameplayHandler({
   json,
   sameOrigin,
   production,
+  now = () => Date.now(),
+  timeouts = ROOM_TIMEOUTS,
 }) {
-  const service = createGameService({ db, getPublishedSongs }),
+  const service = createGameService({ db, getPublishedSongs, now, timeouts }),
     limits = new Map(),
     streams = new Set();
+  const maintenance = setInterval(() => {
+    try {
+      service.sweep();
+    } catch (error) {
+      console.error("Room cleanup failed:", error.message);
+    }
+  }, 10_000);
+  maintenance.unref();
+  function openStream(res, subscribe, snapshot) {
+    // HTTP 204 tells EventSource not to reconnect an already-finished room.
+    if (["finished", "closed"].includes(snapshot.status)) {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    let stopped = false,
+      heartbeat,
+      unsubscribe = () => {};
+    function cleanup() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(heartbeat);
+      streams.delete(finish);
+      unsubscribe();
+    }
+    function finish() {
+      cleanup();
+      res.end();
+    }
+    function write(chunk) {
+      if (stopped || res.destroyed || res.writableEnded) return;
+      if (res.writableLength > 262144) {
+        cleanup();
+        res.destroy();
+        return;
+      }
+      res.write(chunk);
+    }
+    // Install cleanup before subscribing: initial/final snapshots may close the
+    // stream synchronously, and navigation can cancel it during establishment.
+    res.on("close", cleanup);
+    res.on("error", cleanup);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    write("retry: 2000\n\n");
+    streams.add(finish);
+    unsubscribe = subscribe((state) => {
+      write(`event: state\ndata: ${JSON.stringify(state)}\n\n`);
+      if (["finished", "closed"].includes(state.status)) {
+        write("event: closed\ndata: {}\n\n");
+        finish();
+      }
+    });
+    if (stopped) unsubscribe();
+    else {
+      heartbeat = setInterval(() => write("event: ping\ndata: {}\n\n"), 15000);
+      heartbeat.unref();
+    }
+  }
   function identity(req, res, create = false) {
     const token = (req.headers.cookie || "")
       .split(";")
@@ -730,7 +856,8 @@ export function createGameplayHandler({
   return {
     service,
     close() {
-      for (const stream of streams) stream.end();
+      clearInterval(maintenance);
+      for (const finish of [...streams]) finish();
       service.close();
     },
     async handle(req, res, url) {
@@ -813,32 +940,12 @@ export function createGameplayHandler({
           return true;
         }
         if (method === "GET" && action === "events") {
-          service.party.canSubscribe(code, p);
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-cache, no-transform",
-            Connection: "keep-alive",
-            "X-Accel-Buffering": "no",
-          });
-          res.write("retry: 2000\n\n");
-          const write = (chunk) => {
-            if (res.destroyed) return;
-            if (res.writableLength > 262144) {
-              res.destroy();
-              return;
-            }
-            res.write(chunk);
-          };
-          const unsubscribe = service.party.subscribe(code, p, (state) =>
-            write(`event: state\ndata: ${JSON.stringify(state)}\n\n`),
+          const snapshot = service.party.canSubscribe(code, p);
+          openStream(
+            res,
+            (callback) => service.party.subscribe(code, p, callback),
+            snapshot,
           );
-          const heartbeat = setInterval(() => write(": heartbeat\n\n"), 15000);
-          streams.add(res);
-          res.on("close", () => {
-            streams.delete(res);
-            clearInterval(heartbeat);
-            unsubscribe();
-          });
           return true;
         }
         if (method === "POST" && action) {
@@ -880,29 +987,12 @@ export function createGameplayHandler({
         return true;
       }
       if (kind === "rooms" && method === "GET" && action === "events") {
-        // Validate membership before sending SSE headers so access errors stay JSON.
-        const snapshot = service.get(id, p);
-        if (!snapshot.me) throw fail(403, "請先加入這個房間。");
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive",
-          "X-Accel-Buffering": "no",
-        });
-        res.write("retry: 2000\n\n");
-        const send = (state) =>
-          res.write(`event: state\ndata: ${JSON.stringify(state)}\n\n`);
-        const unsubscribe = service.subscribe(id, p, send);
-        const heartbeat = setInterval(
-          () => res.write(": heartbeat\n\n"),
-          15000,
+        const snapshot = service.canSubscribe(id, p);
+        openStream(
+          res,
+          (callback) => service.subscribe(id, p, callback),
+          snapshot,
         );
-        streams.add(res);
-        res.on("close", () => {
-          streams.delete(res);
-          clearInterval(heartbeat);
-          unsubscribe();
-        });
         return true;
       }
       if (method === "POST" && action) {

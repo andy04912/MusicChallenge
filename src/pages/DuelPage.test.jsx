@@ -86,6 +86,7 @@ beforeEach(() => {
   );
   snapshot = structuredClone(base);
   calls = [];
+  source = null;
   vi.stubGlobal(
     "EventSource",
     class {
@@ -322,6 +323,7 @@ test("play marks heard; completed answer waits without revealing until both play
 test("a late snapshot never rolls back newer room state", async () => {
   open();
   await screen.findByRole("button", { name: "播放試聽" });
+  await waitFor(() => expect(source?.url).toBe("/api/rooms/ABC123/events"));
   source.emit({ ...snapshot, revision: 10, status: "closed" });
   await screen.findByRole("heading", { name: "房間已關閉" });
   source.emit({ ...snapshot, revision: 2, status: "playing" });
@@ -333,6 +335,7 @@ test("disconnect blocks guesses, a fresh event restores the same round", async (
   snapshot.me.heard = true;
   open();
   const input = await screen.findByRole("combobox");
+  await waitFor(() => expect(source?.url).toBe("/api/rooms/ABC123/events"));
   source.onerror();
   await waitFor(() => expect(input).toBeDisabled());
   expect(screen.getByText(/正在重新連線/)).toBeInTheDocument();
