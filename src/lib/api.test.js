@@ -43,7 +43,7 @@ test("rapid route switches share a pending read without one route cancelling the
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
 });
 
-test("mutations invalidate navigation data and pending reads cannot restore stale rankings", async () => {
+test("finishing invalidates rankings and pending reads cannot restore stale scores", async () => {
   const path = "/api/leaderboard?mode=classic&limit=5";
   let complete;
   vi.stubGlobal(
@@ -61,6 +61,63 @@ test("mutations invalidate navigation data and pending reads cannot restore stal
   complete(json({ entries: [{ score: 0 }] }));
   await oldRead;
   expect(cachedResponse(path)).toBeUndefined();
+});
+test("creating, playing and guessing preserve setup reads across mode switches", async () => {
+  const fetch = vi.fn(async () => json({ ok: true }));
+  vi.stubGlobal("fetch", fetch);
+  const reads = ["/api/catalog", "/api/player", "/api/config"];
+  for (const path of reads) await request(path);
+  for (const path of [
+    "/api/parties",
+    "/api/rooms",
+    "/api/runs/test/play",
+    "/api/runs/test/guess",
+    "/api/runs/test/finish",
+  ])
+    await request(path, { method: "POST" });
+  for (const path of reads) await request(path);
+  for (const path of reads)
+    expect(fetch.mock.calls.filter(([url]) => url === path)).toHaveLength(1);
+});
+test("unrelated mutations do not discard a catalog read still in progress", async () => {
+  let complete;
+  const fetch = vi.fn((path) =>
+    path === "/api/catalog"
+      ? new Promise((resolve) => {
+          complete = resolve;
+        })
+      : Promise.resolve(json({ status: "playing" })),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const reading = request("/api/catalog");
+  await request("/api/rooms", { method: "POST" });
+  const next = request("/api/catalog");
+  complete(json([{ id: 123 }]));
+  await Promise.all([reading, next]);
+  expect(await request("/api/catalog")).toEqual([{ id: 123 }]);
+  expect(
+    fetch.mock.calls.filter(([path]) => path === "/api/catalog"),
+  ).toHaveLength(1);
+});
+test("admin catalog edits invalidate cached and overlapping old catalog snapshots", async () => {
+  let complete;
+  const fetch = vi.fn((path) =>
+    path === "/api/catalog"
+      ? new Promise((resolve) => {
+          complete = resolve;
+        })
+      : Promise.resolve(json({ updated: true })),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const oldRead = request("/api/catalog");
+  await request("/api/admin/songs", { method: "PATCH" });
+  complete(json([{ id: 1 }]));
+  await oldRead;
+  expect(cachedResponse("/api/catalog")).toBeUndefined();
+  fetch.mockResolvedValueOnce(json([{ id: 2 }]));
+  expect(await request("/api/catalog")).toEqual([{ id: 2 }]);
+  await request("/api/admin/import", { method: "POST" });
+  expect(cachedResponse("/api/catalog")).toBeUndefined();
 });
 
 test("player changes update the short-lived player snapshot", async () => {

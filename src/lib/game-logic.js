@@ -53,28 +53,58 @@ export function stagesForDuration(duration = 0) {
   }
   return stages;
 }
+const searchIndexes = new WeakMap();
+function songSearchIndex(songs) {
+  if (searchIndexes.has(songs)) return searchIndexes.get(songs);
+  const seen = new Set();
+  const entries = [],
+    titles = new Map();
+  for (const song of songs) {
+    const title = normalize(song.title),
+      artist = normalize(song.artist);
+    const key = `${title}|${artist}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      entries.push({
+        song,
+        title,
+        artist,
+        artistTitle: artist + title,
+        titleArtist: title + artist,
+      });
+      const matches = titles.get(title) || [];
+      matches.push(song);
+      titles.set(title, matches);
+    }
+  }
+  // The catalog/filtered pool is immutable. Prepare once, not on each keypress.
+  entries.sort((a, b) => a.song.title.localeCompare(b.song.title, "zh-Hant"));
+  const index = { entries, titles };
+  searchIndexes.set(songs, index);
+  return index;
+}
+export function exactSong(songs, query) {
+  const matches = songSearchIndex(songs).titles.get(normalize(query));
+  // Different singers with the same title still require an explicit choice.
+  return matches?.length === 1 ? matches[0] : null;
+}
 export function searchSongs(songs, query, limit = 8) {
   const q = normalize(query);
   if (!q) return [];
-  const seen = new Set();
-  return songs
-    .filter((song) => {
-      const key = songKey(song);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return (
-        normalize(song.title).includes(q) ||
-        normalize(song.artist).includes(q) ||
-        normalize(`${song.artist} ${song.title}`).includes(q) ||
-        normalize(`${song.title} ${song.artist}`).includes(q)
-      );
-    })
-    .sort(
-      (a, b) =>
-        Number(normalize(b.title) === q) - Number(normalize(a.title) === q) ||
-        a.title.localeCompare(b.title, "zh-Hant"),
+  const { entries, titles } = songSearchIndex(songs);
+  const result = [...(titles.get(q) || [])].slice(0, limit);
+  for (const { song, title, artist, artistTitle, titleArtist } of entries) {
+    if (result.length >= limit) break;
+    if (
+      title !== q &&
+      (title.includes(q) ||
+        artist.includes(q) ||
+        artistTitle.includes(q) ||
+        titleArtist.includes(q))
     )
-    .slice(0, limit);
+      result.push(song);
+  }
+  return result;
 }
 export function isCorrectGuess(answer, text, selectedSong = null) {
   if (selectedSong) return songKey(answer) === songKey(selectedSong);

@@ -1,5 +1,5 @@
 import { timeoutMessage } from "../lib/live-connection.js";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import LoadingState from "../components/LoadingState.jsx";
 import {
   Link,
@@ -193,13 +193,15 @@ export default function DuelPage() {
       try {
         if (code && !validRoomCode(code))
           throw new Error("邀請連結不完整，請向朋友索取新的連結。");
-        const player = await request("/api/player", { signal: abort.signal });
+        const [player, songs] = await Promise.all([
+          request("/api/player", { signal: abort.signal }),
+          request("/api/catalog", { signal: abort.signal }),
+        ]);
         if (abort.signal.aborted) return;
         setNickname(readPlayerName(player.nickname || ""));
+        setCatalog(songs);
         if (code)
           accept(await request(roomPath(code), { signal: abort.signal }));
-        const songs = await request("/api/catalog", { signal: abort.signal });
-        if (!abort.signal.aborted) setCatalog(songs);
       } catch (err) {
         if (!abort.signal.aborted) setError(err.message);
       } finally {
@@ -371,14 +373,23 @@ export default function DuelPage() {
   }
   const me = room?.me,
     status = room?.status;
-  const pool = room
-    ? filterPool(
-        catalog,
-        room.settings?.region,
-        room.settings?.category,
-        room.settings?.decade,
-      )
-    : [];
+  const pool = useMemo(
+    () =>
+      room
+        ? filterPool(
+            catalog,
+            room.settings?.region,
+            room.settings?.category,
+            room.settings?.decade,
+          )
+        : [],
+    [
+      catalog,
+      room?.settings?.region,
+      room?.settings?.category,
+      room?.settings?.decade,
+    ],
+  );
   const title = !code
     ? "好友對戰"
     : status === "waiting"

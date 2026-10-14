@@ -119,7 +119,7 @@ describe("React autocomplete", () => {
       }),
     );
   });
-  test("editing a selected suggestion clears the selected identity; arbitrary full text is allowed", async () => {
+  test("editing a selected suggestion auto-selects a uniquely matching full title", async () => {
     const user = userEvent.setup(),
       guess = vi.fn();
     render(<GuessInput songs={songs} onGuess={guess} />);
@@ -129,7 +129,8 @@ describe("React autocomplete", () => {
     await user.clear(input);
     await user.type(input, "七里香");
     await user.click(screen.getByRole("button", { name: "送出答案" }));
-    expect(guess).toHaveBeenCalledWith({ text: "七里香", song: null });
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(guess).toHaveBeenCalledWith({ text: "七里香", song: songs[0] });
   });
   test("IME confirmation never submits mid-composition, and Escape closes suggestions", async () => {
     const user = userEvent.setup(),
@@ -141,11 +142,43 @@ describe("React autocomplete", () => {
     fireEvent.submit(input.closest("form"));
     expect(guess).not.toHaveBeenCalled();
     fireEvent.compositionEnd(input, { data: "七里香" });
-    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(input).toHaveAttribute("aria-expanded", "false");
     await user.click(input);
     await user.keyboard("{Escape}");
     expect(input).toHaveAttribute("aria-expanded", "false");
     await user.click(screen.getByRole("button", { name: "送出答案" }));
     expect(guess).toHaveBeenCalledOnce();
+    expect(guess).toHaveBeenCalledWith({ text: "七里香", song: songs[0] });
+  });
+  test("a pasted full title normalizes case and selects without submitting", async () => {
+    const guess = vi.fn();
+    render(<GuessInput songs={songs} onGuess={guess} />);
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "ｊｕｍｐ" } });
+    expect(input).toHaveValue("JUMP");
+    expect(screen.getByRole("status")).toHaveTextContent("已選 JUMP");
+    expect(guess).not.toHaveBeenCalled();
+    fireEvent.submit(input.closest("form"));
+    expect(guess).toHaveBeenCalledWith({ text: "JUMP", song: songs[2] });
+  });
+  test("same title by different singers stays selectable; unknown free text is still allowed", async () => {
+    const user = userEvent.setup(),
+      guess = vi.fn();
+    const tracks = [...songs, { id: 4, title: "七里香", artist: "另一歌手" }];
+    render(<GuessInput songs={tracks} onGuess={guess} />);
+    const input = screen.getByRole("combobox");
+    await user.type(input, "七里香");
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    await user.click(screen.getByRole("option", { name: "七里香 周杰倫" }));
+    await user.click(screen.getByRole("button", { name: "送出答案" }));
+    expect(guess).toHaveBeenLastCalledWith({ text: "七里香", song: songs[0] });
+    await user.clear(input);
+    await user.type(input, "不在建議裡的歌");
+    await user.click(screen.getByRole("button", { name: "送出答案" }));
+    expect(guess).toHaveBeenLastCalledWith({
+      text: "不在建議裡的歌",
+      song: null,
+    });
   });
 });
