@@ -1,5 +1,11 @@
 import { test, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import GamePage from "./GamePage.jsx";
 
@@ -42,6 +48,7 @@ function fresh(
     points: 1000,
     heard: false,
     feedback: "",
+    wrongGuesses: [],
     preview: { id: "round-1", preview: songs[0].preview },
     answer: null,
     lastResult: null,
@@ -72,6 +79,11 @@ function mockServer(catalog = songs) {
           status: 409,
         });
       state = { ...state, revision: state.revision + 1 };
+      if (
+        action === "guess" &&
+        body.answer !== songs[(state.round - 1) % songs.length].title
+      )
+        state.wrongGuesses = [...state.wrongGuesses, body.answer];
       if (action === "play") state.heard = true;
       if (
         action === "extend" ||
@@ -117,6 +129,7 @@ function mockServer(catalog = songs) {
           state.points = 1000;
           state.heard = false;
           state.feedback = "";
+          state.wrongGuesses = [];
         }
       }
       if (action === "finish") state.status = "finished";
@@ -208,18 +221,30 @@ test("play authorizes once; wrong guesses use authoritative tier and correct ans
     duration: 30,
   });
   fireEvent.change(screen.getByRole("combobox"), {
-    target: { value: "wrong" },
+    target: { value: "Song 1" },
   });
+  await user.click(screen.getByRole("option", { name: "Song 1 BLACKPINK" }));
   await user.click(screen.getByRole("button", { name: "送出答案" }));
   await waitFor(() =>
     expect(screen.getByRole("progressbar")).toHaveAttribute("max", "6"),
   );
   expect(screen.getByRole("combobox")).toHaveValue("");
+  expect(
+    within(screen.getByRole("list", { name: "本題猜錯紀錄" })).getByText(
+      "Song 1",
+    ),
+  ).toBeVisible();
   fireEvent.change(screen.getByRole("combobox"), {
     target: { value: "Song 0" },
   });
+  await user.click(screen.getByRole("option", { name: "Song 0 BLACKPINK" }));
   await user.click(screen.getByRole("button", { name: "送出答案" }));
   await screen.findByText("答對了！ +800 分");
+  expect(
+    within(screen.getByRole("list", { name: "本題猜錯紀錄" })).getAllByRole(
+      "listitem",
+    ),
+  ).toHaveLength(1);
   expect(
     calls
       .filter((call) => call.url.endsWith("/guess"))
@@ -228,6 +253,11 @@ test("play authorizes once; wrong guesses use authoritative tier and correct ans
   expect(
     screen.getByRole("link", { name: "在 Apple Music 聆聽" }),
   ).toHaveAttribute("href", expect.stringContaining("app=music"));
+  await user.click(screen.getByRole("button", { name: "下一首" }));
+  await screen.findByRole("combobox");
+  expect(
+    screen.queryByRole("list", { name: "本題猜錯紀錄" }),
+  ).not.toBeInTheDocument();
 });
 
 test("endless continues after five songs and explicit finish records a bounded paginated result", async () => {
@@ -242,10 +272,11 @@ test("endless continues after five songs and explicit finish records a bounded p
   expect(state.round).toBe(7);
   await user.click(screen.getByRole("button", { name: "結束挑戰" }));
   await screen.findByRole("heading", { name: "這一輪，聽得漂亮。" });
-  expect(screen.getAllByRole("article")).toHaveLength(2);
+  expect(screen.getAllByRole("article")).toHaveLength(4);
   expect(screen.getByText("Song 0")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "下一頁歌曲" }));
-  expect(screen.getByText("Song 2")).toBeVisible();
+  expect(screen.getByText("Song 4")).toBeVisible();
+  expect(screen.getAllByRole("article")).toHaveLength(2);
   expect(screen.queryByText("Song 0")).not.toBeInTheDocument();
   expect(sessionStorage.getItem("music-challenge-active-run")).toBeNull();
 });
@@ -323,6 +354,7 @@ test("a lost guess response recovers the scored server snapshot without submitti
   fireEvent.change(screen.getByRole("combobox"), {
     target: { value: "Song 0" },
   });
+  await user.click(screen.getByRole("option", { name: "Song 0 BLACKPINK" }));
   await user.click(screen.getByRole("button", { name: "送出答案" }));
   await screen.findByText("答對了！ +1,000 分");
   expect(calls.filter((call) => call.url.endsWith("/guess"))).toHaveLength(1);
@@ -363,7 +395,9 @@ test("classic setup counts unique titles and artists and matches shorter server 
   await user.click(screen.getByRole("button", { name: /下一步：選擇歌曲/ }));
   expect(screen.getByText("經典 2 首 · K-POP")).toBeVisible();
   expect(screen.queryByText(/首可挑戰/)).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "不限", exact: true })).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "不限", exact: true }),
+  ).toBeVisible();
   expect(screen.getByRole("button", { name: "開始猜歌" })).toBeEnabled();
 });
 
@@ -375,7 +409,9 @@ test("nickname edits survive remount before a run starts", async () => {
   await user.type(screen.getByLabelText("排行榜暱稱"), "我的暱稱");
   first.unmount();
   render(<GamePage />);
-  await waitFor(() => expect(screen.getByLabelText("排行榜暱稱")).toBeEnabled());
+  await waitFor(() =>
+    expect(screen.getByLabelText("排行榜暱稱")).toBeEnabled(),
+  );
   expect(screen.getByLabelText("排行榜暱稱")).toHaveValue("我的暱稱");
-  expect(calls.some(call => call.method === "PATCH")).toBe(false);
+  expect(calls.some((call) => call.method === "PATCH")).toBe(false);
 });

@@ -10,6 +10,9 @@
   gap: 14px;
   overflow: hidden;
 }
+.duel-status-setup {
+  width: min(100%, 470px);
+}
 .duel-page button,
 .duel-page input,
 .duel-page a {
@@ -28,7 +31,7 @@
 }
 .duel-header .eyebrow {
   margin: 0 0 4px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .duel-exit {
   margin-left: auto;
@@ -70,7 +73,7 @@
   gap: 20px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .duel-step .active {
@@ -80,7 +83,7 @@
 .duel-nickname {
   display: grid;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 .duel-nickname input,
@@ -101,7 +104,7 @@
   gap: 8px;
 }
 .duel-choice > span {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 .duel-choice select {
@@ -130,7 +133,7 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
 }
 .duel-choice button[aria-pressed="true"] {
   background: var(--ink);
@@ -155,7 +158,7 @@
 .duel-settings-label {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .duel-join-icon,
@@ -230,12 +233,12 @@
   background: var(--ink);
   color: var(--paper);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 14px;
 }
 .duel-player-name {
   min-width: 0;
   flex: 1;
-  font-size: 13px;
+  font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -243,7 +246,7 @@
 .duel-player-name small {
   display: block;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .duel-players strong {
   font-size: 20px;
@@ -309,7 +312,7 @@
 .duel-feedback {
   min-height: 20px;
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--muted);
 }
 .duel-reveal {
@@ -321,7 +324,7 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -345,7 +348,7 @@
   margin: 0;
 }
 .duel-center p {
-  font-size: 14px;
+  font-size: 16px;
   margin: 0;
   color: var(--muted);
 }
@@ -379,7 +382,7 @@
   min-width: 0;
 }
 .duel-song span {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .duel-song h2 {
@@ -392,13 +395,13 @@
 .duel-song p {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
 }
 .duel-song a {
   display: inline-block;
   padding-block: 8px;
   color: var(--ink);
-  font-size: 11px;
+  font-size: 13px;
 }
 .duel-scoreboard {
   display: grid;
@@ -415,7 +418,7 @@
 }
 .duel-scoreboard h3 {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -426,7 +429,7 @@
   gap: 6px;
 }
 .score-roll span {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .score-roll strong {
@@ -436,12 +439,12 @@
   font-variant-numeric: tabular-nums;
 }
 .score-roll small {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .duel-scoreboard p {
   margin: 12px 0 0;
-  font-size: 12px;
+  font-size: 14px;
 }
 .duel-next .primary {
   width: 100%;
@@ -472,7 +475,7 @@
 }
 .duel-final-caption {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .duel-final-total {
   font-family: "Barlow Condensed", sans-serif;
@@ -504,7 +507,7 @@
   padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   flex-shrink: 0;
 }
@@ -549,7 +552,7 @@
 }
 .duel-modal-eyebrow {
   color: var(--pink);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   font-weight: 700;
 }
@@ -557,7 +560,7 @@
   font-size: 23px;
 }
 .duel-confirm p {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
 }
 .duel-confirm h2,
@@ -618,7 +621,7 @@
     gap: 16px;
   }
   .duel-intro {
-    font-size: 13px;
+    font-size: 15px;
   }
   .duel-players {
     gap: 8px;
@@ -667,7 +670,7 @@
   }
   .duel-feedback {
     margin-bottom: 4px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .duel-result {
     gap: 12px;
@@ -679,7 +682,7 @@
     padding: 12px 5px;
   }
   .duel-scoreboard h3 {
-    font-size: 12px;
+    font-size: 14px;
     margin-bottom: 10px;
   }
   .duel-final-total {
@@ -699,7 +702,7 @@
     font-size: 19px;
   }
   .duel-song p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .duel-song a {
     padding-block: 5px;

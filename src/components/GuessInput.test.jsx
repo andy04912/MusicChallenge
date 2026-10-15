@@ -50,7 +50,7 @@ describe("React autocomplete", () => {
   test("touch paging survives blur and the compatibility click does not advance twice", async () => {
     const user = userEvent.setup(),
       guess = vi.fn();
-    const tracks = Array.from({ length: 6 }, (_, i) => ({
+    const tracks = Array.from({ length: 10 }, (_, i) => ({
       id: i + 10,
       title: `Song ${i}`,
       artist: "Singer",
@@ -63,9 +63,9 @@ describe("React autocomplete", () => {
     act(() => input.blur());
     touch(next, "pointerup");
     fireEvent.click(next, { detail: 1 });
-    expect(screen.getByRole("option", { name: "Song 2 Singer" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "Song 4 Singer" })).toBeVisible();
     expect(
-      screen.queryByRole("option", { name: "Song 4 Singer" }),
+      screen.queryByRole("option", { name: "Song 8 Singer" }),
     ).not.toBeInTheDocument();
     expect(guess).not.toHaveBeenCalled();
   });
@@ -94,13 +94,14 @@ describe("React autocomplete", () => {
     }));
     render(<GuessInput songs={tracks} onGuess={guess} />);
     await user.type(screen.getByRole("combobox"), "Singer");
-    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(screen.getAllByRole("option")).toHaveLength(4);
     await user.click(screen.getByRole("button", { name: "下一頁歌曲建議" }));
-    expect(screen.getByRole("option", { name: "Song 2 Singer" })).toBeVisible();
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(screen.getByRole("option", { name: "Song 4 Singer" })).toBeVisible();
     expect(guess).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("option", { name: "Song 2 Singer" }));
+    await user.click(screen.getByRole("option", { name: "Song 4 Singer" }));
     await user.click(screen.getByRole("button", { name: "送出答案" }));
-    expect(guess).toHaveBeenCalledWith({ text: "Song 2", song: tracks[2] });
+    expect(guess).toHaveBeenCalledWith({ text: "Song 4", song: tracks[4] });
   });
   test("artist search and keyboard selection require a separate submit", async () => {
     const user = userEvent.setup(),
@@ -119,7 +120,7 @@ describe("React autocomplete", () => {
       }),
     );
   });
-  test("editing a selected suggestion auto-selects a uniquely matching full title", async () => {
+  test("editing a selected suggestion requires selecting the new title", async () => {
     const user = userEvent.setup(),
       guess = vi.fn();
     render(<GuessInput songs={songs} onGuess={guess} />);
@@ -128,6 +129,8 @@ describe("React autocomplete", () => {
     await user.click(screen.getByRole("option", { name: "JUMP BLACKPINK" }));
     await user.clear(input);
     await user.type(input, "七里香");
+    expect(screen.getByRole("button", { name: "送出答案" })).toBeDisabled();
+    await user.click(screen.getByRole("option", { name: "七里香 周杰倫" }));
     await user.click(screen.getByRole("button", { name: "送出答案" }));
     expect(input).toHaveAttribute("aria-expanded", "false");
     expect(guess).toHaveBeenCalledWith({ text: "七里香", song: songs[0] });
@@ -142,7 +145,8 @@ describe("React autocomplete", () => {
     fireEvent.submit(input.closest("form"));
     expect(guess).not.toHaveBeenCalled();
     fireEvent.compositionEnd(input, { data: "七里香" });
-    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByRole("option", { name: "七里香 周杰倫" }));
     await user.click(input);
     await user.keyboard("{Escape}");
     expect(input).toHaveAttribute("aria-expanded", "false");
@@ -150,18 +154,24 @@ describe("React autocomplete", () => {
     expect(guess).toHaveBeenCalledOnce();
     expect(guess).toHaveBeenCalledWith({ text: "七里香", song: songs[0] });
   });
-  test("a pasted full title normalizes case and selects without submitting", async () => {
-    const guess = vi.fn();
+  test("a pasted full title still requires an explicit selection", async () => {
+    const guess = vi.fn(),
+      user = userEvent.setup();
     render(<GuessInput songs={songs} onGuess={guess} />);
     const input = screen.getByRole("combobox");
     fireEvent.change(input, { target: { value: "ｊｕｍｐ" } });
-    expect(input).toHaveValue("JUMP");
-    expect(screen.getByRole("status")).toHaveTextContent("已選 JUMP");
+    expect(input).toHaveValue("ｊｕｍｐ");
+    expect(
+      screen.getByRole("option", { name: "JUMP BLACKPINK" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "送出答案" })).toBeDisabled();
+    fireEvent.submit(input.closest("form"));
     expect(guess).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("option", { name: "JUMP BLACKPINK" }));
     fireEvent.submit(input.closest("form"));
     expect(guess).toHaveBeenCalledWith({ text: "JUMP", song: songs[2] });
   });
-  test("same title by different singers stays selectable; unknown free text is still allowed", async () => {
+  test("same title by different singers stays selectable; unknown free text cannot submit", async () => {
     const user = userEvent.setup(),
       guess = vi.fn();
     const tracks = [...songs, { id: 4, title: "七里香", artist: "另一歌手" }];
@@ -175,10 +185,12 @@ describe("React autocomplete", () => {
     expect(guess).toHaveBeenLastCalledWith({ text: "七里香", song: songs[0] });
     await user.clear(input);
     await user.type(input, "不在建議裡的歌");
+    expect(
+      screen.getByText("找不到歌曲，試試部分歌名或歌手名稱。"),
+    ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "送出答案" }));
-    expect(guess).toHaveBeenLastCalledWith({
-      text: "不在建議裡的歌",
-      song: null,
-    });
+    expect(screen.getByRole("button", { name: "送出答案" })).toBeDisabled();
+    fireEvent.submit(input.closest("form"));
+    expect(guess).toHaveBeenCalledTimes(1);
   });
 });

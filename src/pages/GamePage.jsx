@@ -15,7 +15,7 @@ import { appleURL, request, cachedResponse } from "../lib/api.js";
 import GuessInput from "../components/GuessInput.jsx";
 import PreviewPlayer from "../components/PreviewPlayer.jsx";
 import Turntable from "../components/Turntable.jsx";
-import ShareResultButton from "../components/ShareResultButton.jsx";
+import SoloResults from "../components/SoloResults.jsx";
 import "./solo.css";
 
 const activeRunKey = "music-challenge-active-run";
@@ -67,8 +67,7 @@ export default function GamePage() {
     [decade, setDecade] = useState("all"),
     [mode, setMode] = useState("classic");
   const [setupStep, setSetupStep] = useState(0),
-    [run, setRun] = useState(null),
-    [historyPage, setHistoryPage] = useState(0);
+    [run, setRun] = useState(null);
   const [loading, setLoading] = useState(
       () =>
         !!storedRun() ||
@@ -212,7 +211,6 @@ export default function GamePage() {
       if (alive.current) {
         duration.current = 0;
         heardRound.current = null;
-        setHistoryPage(0);
         accept(next);
       }
     } catch (err) {
@@ -393,80 +391,10 @@ export default function GamePage() {
         </div>
       </section>
     );
-  if (run.status === "finished") {
-    const pages = Math.max(1, Math.ceil(run.history.length / 2)),
-      page = Math.min(historyPage, pages - 1);
+  if (run.status === "finished")
     return (
-      <section
-        className="solo-screen solo-results"
-        aria-labelledby="solo-results-title"
-      >
-        <p className="solo-kicker">CHALLENGE COMPLETE</p>
-        <h1 id="solo-results-title">這一輪，聽得漂亮。</h1>
-        <div className="solo-final-score">
-          <strong>{run.score.toLocaleString()}</strong>
-          <span>
-            {run.correct} / {run.played} 首猜中 ·{" "}
-            {run.mode === "classic" ? "經典" : "無限"}挑戰
-          </span>
-        </div>
-        <p className="solo-results-note">成績已記錄，可從排行榜查看。</p>
-        <div className="solo-history" aria-label="本輪歌曲">
-          {run.history.slice(page * 2, page * 2 + 2).map((item) => (
-            <article className="solo-history-row" key={item.round}>
-              <img src={item.song.artwork} alt="" width="44" height="44" />
-              <div>
-                <strong>{item.song.title}</strong>
-                <span>{item.song.artist}</span>
-              </div>
-              <b>+{item.points}</b>
-              <a
-                href={appleURL(item.song)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`在 Apple Music 聆聽 ${item.song.title}`}
-              >
-                <ArrowUpRightIcon />
-              </a>
-            </article>
-          ))}
-        </div>
-        {pages > 1 && (
-          <div className="solo-pagination">
-            <button
-              className="text-button"
-              disabled={page === 0}
-              onClick={() => setHistoryPage(page - 1)}
-              aria-label="上一頁歌曲"
-            >
-              <ArrowLeftIcon />
-            </button>
-            <span>
-              {page + 1} / {pages}
-            </span>
-            <button
-              className="text-button"
-              disabled={page === pages - 1}
-              onClick={() => setHistoryPage(page + 1)}
-              aria-label="下一頁歌曲"
-            >
-              <ArrowRightIcon />
-            </button>
-          </div>
-        )}
-        <div className="result-finished-actions">
-          <button className="primary solo-primary" onClick={home}>
-            再挑戰一次
-            <ArrowRightIcon />
-          </button>
-          <ShareResultButton sessionId={run.id} />
-        </div>
-        <p className="solo-message" role="alert">
-          {error}
-        </p>
-      </section>
+      <SoloResults key={run.id} run={run} onRestart={home} error={error} />
     );
-  }
   const revealed = run.status === "revealed",
     song = run.answer || run.preview;
   return (
@@ -474,26 +402,30 @@ export default function GamePage() {
       className={`solo-screen solo-game ${revealed ? "is-revealed" : ""}`}
       aria-labelledby={revealed ? "solo-answer-title" : "solo-question-title"}
     >
-      <div className="solo-game-heading">
-        <button
-          className="text-button solo-finish"
-          onClick={() => action("finish")}
-          disabled={pending}
-        >
-          結束挑戰
-        </button>
-        <span className="solo-round">
-          {run.mode === "endless" ? "∞" : "TRACK"}{" "}
-          {String(run.round).padStart(2, "0")}
-          {run.totalRounds
-            ? ` / ${String(run.totalRounds).padStart(2, "0")}`
-            : ""}
-        </span>
-        <div className="solo-score-tools">
-          <strong className="solo-header-score">
-            {run.score.toLocaleString()}
-            <small> 分</small>
-          </strong>
+      <div className="solo-game-top">
+        <div className="solo-game-heading">
+          <button
+            className="text-button solo-finish"
+            onClick={() => action("finish")}
+            disabled={pending}
+          >
+            結束挑戰
+          </button>
+          <span className="solo-round">
+            {run.mode === "endless" ? "∞" : "TRACK"}{" "}
+            {String(run.round).padStart(2, "0")}
+            {run.totalRounds
+              ? ` / ${String(run.totalRounds).padStart(2, "0")}`
+              : ""}
+          </span>
+          <div className="solo-score-tools">
+            <strong className="solo-header-score">
+              {run.score.toLocaleString()}
+              <small> 分</small>
+            </strong>
+          </div>
+        </div>
+        <div className="solo-game-help-row">
           <button
             className="game-help"
             aria-label="玩法說明"
@@ -523,6 +455,7 @@ export default function GamePage() {
             </div>
           }
           stagePoints={run.points}
+          wrongGuesses={run.wrongGuesses}
           onPlaybackStarted={beganPlayback}
           onDuration={(value) => {
             duration.current = value;
@@ -557,7 +490,7 @@ export default function GamePage() {
               </h2>
               <p className="solo-feedback" role="status">
                 {run.feedback ||
-                  (run.heard ? "歌名或歌手都可以搜尋" : "按播放，聽完再猜")}
+                  (run.heard ? "搜尋歌名或歌手，選取後送出" : "按播放，聽完再猜")}
               </p>
               <GuessInput
                 key={`${run.preview.id}-${run.stage}`}

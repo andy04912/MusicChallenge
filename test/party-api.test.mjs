@@ -164,16 +164,14 @@ test(
     catalogDb
       .prepare("UPDATE songs SET status='draft' WHERE id=?")
       .run(target.id);
-    const draftGuess = await (
-      await request(
-        `/api/parties/${room.code}/guess`,
-        players[0].cookie,
-        "POST",
-        { roundId: room.roundId, songId: target.id, answer: target.title },
-      )
-    ).json();
-    assert.equal(draftGuess.me.status, "guessing");
-    assert.equal(draftGuess.me.score, 0);
+    const draftGuess = await request(
+      `/api/parties/${room.code}/guess`,
+      players[0].cookie,
+      "POST",
+      { roundId: room.roundId, songId: target.id, answer: target.title },
+    );
+    assert.equal(draftGuess.status, 400);
+    assert.equal((await draftGuess.json()).error, "請從搜尋選單選擇歌曲。");
     catalogDb
       .prepare("UPDATE songs SET status='published' WHERE id=?")
       .run(target.id);
@@ -253,7 +251,7 @@ test(
         request(`/api/parties/${room.code}/guess`, p.cookie, "POST", {
           roundId: room.roundId,
           answer: target.title,
-          ...(index % 2 ? { songId: target.id } : {}),
+          songId: target.id,
           score: 999999,
         }),
       ),

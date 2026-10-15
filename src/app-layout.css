@@ -320,7 +320,7 @@ dialog {
     display: none;
   }
   .app-shell[data-keyboard="open"] #guess-suggestions {
-    max-height: min(160px, 24dvh);
+    max-height: none;
   }
   .app-shell[data-keyboard="open"] #submit-guess {
     position: sticky;
@@ -427,19 +427,6 @@ dialog {
   }
   .hero .disc-label > span {
     font-size: 24px;
-  }
-  .hero .tonearm {
-    width: 5px;
-  }
-  .hero .tonearm::before {
-    width: 16px;
-    height: 16px;
-    left: -7px;
-    border-width: 3px;
-  }
-  .hero .tonearm::after {
-    width: 8px;
-    height: 17px;
   }
   .hero-copy {
     display: contents;

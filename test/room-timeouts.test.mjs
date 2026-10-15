@@ -20,7 +20,14 @@ const songs = [
 function fixture(t) {
   const db = new DatabaseSync(":memory:");
   let clock = 1_000;
-  const options = { db, getPublishedSongs: () => songs, now: () => clock };
+  const options = {
+    db,
+    getPublishedSongs: () => [
+      ...songs,
+      { ...songs[0], id: 2, title: "Wrong", region: "tw" },
+    ],
+    now: () => clock,
+  };
   let service = createGameService(options);
   const a = service.player().player,
     b = service.player().player;
@@ -59,7 +66,7 @@ test("idle duel expires despite live sockets/reads, banks the completed answer o
   service.subscribe(room.code, a, (x) => events.push(x));
   service.subscribe(room.code, b, () => {});
   change(service, room.code, a, "play");
-  change(service, room.code, a, "guess", { answer: "Song" });
+  change(service, room.code, a, "guess", { answer: "Song", songId: 1 });
   f.advance(599_999);
   assert.equal(service.get(room.code, a).status, "playing");
   f.advance(1);
@@ -132,10 +139,10 @@ test("a departed party host expires even while players keep submitting; earned p
   const act = (p, name, extra = {}) =>
     party.mutate(room.code, p, name, { roundId: room.roundId, ...extra });
   act(a, "start");
-  act(b, "guess", { answer: "Song" });
+  act(b, "guess", { answer: "Song", songId: 1 });
   stopHost();
   f.advance(110_000);
-  act(c, "guess", { answer: "Wrong" });
+  act(c, "guess", { answer: "Wrong", songId: 2 });
   f.advance(10_000);
   service.sweep();
   assert.equal(events.at(-1).status, "finished");
@@ -188,7 +195,10 @@ test("SSE cancellation releases presence, subsequent room requests work and term
   };
   const handler = createGameplayHandler({
     db,
-    getPublishedSongs: () => songs,
+    getPublishedSongs: () => [
+      ...songs,
+      { ...songs[0], id: 2, title: "Wrong", region: "tw" },
+    ],
     now: () => clock,
     body: async () => ({}),
     json,

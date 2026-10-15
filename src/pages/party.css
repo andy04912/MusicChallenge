@@ -20,7 +20,7 @@
   min-width: 0;
 }
 .party-header p {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--pink);
   margin: 0 0 5px;
@@ -59,7 +59,7 @@
 }
 .party-setup > p {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.6;
 }
@@ -74,7 +74,7 @@
 .party-setup label {
   display: grid;
   gap: 7px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 .party-setup input,
@@ -117,7 +117,7 @@
   margin: 0;
 }
 .party-center p {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.6;
   margin: 0;
   color: var(--muted);
@@ -171,7 +171,7 @@
   border-radius: 50%;
   background: var(--turntable-pink);
   color: var(--button-ink);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
 }
 .party-play svg {
@@ -185,7 +185,7 @@
   font-size: 18px;
 }
 .party-play-row p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin: 6px 0 12px;
 }
@@ -203,7 +203,7 @@
   text-align: center;
 }
 .party-host-controls > p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin: 0;
   text-align: center;
@@ -222,7 +222,7 @@
   border-radius: 8px;
   background: transparent;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 15px;
 }
 .party-lobby-tabs button[aria-pressed="true"] {
   background: var(--ink);
@@ -259,7 +259,7 @@
   margin: 0;
 }
 .party-invitation > p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.5;
   margin: 0;
@@ -293,14 +293,14 @@
   width: 100%;
   display: grid;
   gap: 5px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .party-origin select {
-  font-size: 14px;
+  font-size: 16px;
 }
 .party-network-note {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
   margin: 0;
@@ -320,7 +320,7 @@
   margin: 0;
 }
 .party-list-heading > span {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .party-participants ol {
@@ -344,7 +344,7 @@
   flex-shrink: 0;
   border: 1px solid var(--line);
   border-radius: 50%;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
 }
 .party-place.is-correct {
@@ -359,13 +359,13 @@
   gap: 4px;
 }
 .party-participants strong {
-  font-size: 14px;
+  font-size: 16px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .party-participants small {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .party-participants b {
@@ -388,11 +388,11 @@
   color: var(--ink);
 }
 .party-pages span {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .party-empty {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--muted);
   text-align: center;
   padding: 30px 0;
@@ -417,7 +417,7 @@
   gap: 12px;
 }
 .party-your-score > span {
-  font-size: 14px;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -428,7 +428,7 @@
   line-height: 1;
 }
 .party-your-score small {
-  font-size: 12px;
+  font-size: 14px;
   font-family: Arial, sans-serif;
   font-weight: 400;
 }
@@ -440,7 +440,7 @@
   margin: 0 0 8px;
 }
 .party-player-answer > p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--muted);
   margin: 0 0 8px;
@@ -455,7 +455,7 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   text-decoration: underline;
   text-underline-offset: 4px;
   padding: 8px 12px;
@@ -479,7 +479,7 @@
   font-family: "Barlow Condensed", sans-serif;
 }
 .party-answer-status p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin: 8px 0;
 }
@@ -487,7 +487,7 @@
   text-align: center;
 }
 .party-answer-song span {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--pink);
   font-weight: 700;
 }
@@ -500,7 +500,7 @@
   white-space: nowrap;
 }
 .party-answer-song p {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--muted);
   margin: 0;
 }
@@ -508,15 +508,15 @@
   display: inline-flex;
   align-items: center;
   min-height: 38px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .party-answer-song small {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .party-error {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--pink);
   margin: 0;
   line-height: 1.5;
@@ -572,7 +572,7 @@
   backdrop-filter: blur(5px);
 }
 .party-end-dialog > span {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   color: var(--pink);
   font-weight: 700;
@@ -582,7 +582,7 @@
   margin: 0;
 }
 .party-end-dialog p {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   margin: 0;
 }
@@ -627,7 +627,7 @@
     font-size: 42px;
   }
   .party-setup > p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .party-host-layout {
     display: flex;
@@ -654,7 +654,7 @@
   .party-play {
     width: 68px;
     height: 68px;
-    font-size: 10px;
+    font-size: 12px;
     gap: 4px;
   }
   .party-play svg {
@@ -668,7 +668,7 @@
   }
   .party-play-row p {
     margin: 4px 0 8px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .party-qr {
     width: 120px;
@@ -682,7 +682,7 @@
     font-size: 17px;
   }
   .party-invitation > p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .party-host-side {
     gap: 8px;
@@ -703,7 +703,7 @@
   }
   .party-lobby-tabs button {
     min-height: 40px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .party-list-heading {
     margin-bottom: 6px;
@@ -716,10 +716,10 @@
     gap: 8px;
   }
   .party-participants strong {
-    font-size: 13px;
+    font-size: 15px;
   }
   .party-participants small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .party-participants b {
     font-size: 21px;
@@ -727,7 +727,7 @@
   .party-place {
     width: 26px;
     height: 26px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .party-mobile-game {
     gap: 12px;
@@ -746,7 +746,7 @@
     font-size: 19px;
   }
   .party-center p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .party-answer-status {
     padding: 5px 0;
@@ -804,7 +804,7 @@
     gap: 9px;
   }
   .party-setup > p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .party-answer-status svg {
     display: none;
@@ -822,7 +822,7 @@
     gap: 8px;
   }
   .party-host-controls > p {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-height: 520px) and (min-width: 681px) {
@@ -844,7 +844,7 @@
   }
   .party-setup > p {
     grid-column: 1/-1;
-    font-size: 12px;
+    font-size: 14px;
   }
   .party-setting-grid {
     grid-row: 2/4;

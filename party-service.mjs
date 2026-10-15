@@ -374,11 +374,10 @@ export function createPartyService({
               selected = Number.isSafeInteger(input.songId)
                 ? getPublishedSong(input.songId)
                 : null;
-            const correct = Number.isSafeInteger(input.songId)
-              ? !!selected &&
-                norm(selected.title) === norm(target.title) &&
-                norm(selected.artist) === norm(target.artist)
-              : norm(input.answer) === norm(target.title);
+            if (!selected) throw fail(400, "請從搜尋選單選擇歌曲。");
+            const correct =
+              norm(selected.title) === norm(target.title) &&
+              norm(selected.artist) === norm(target.artist);
             if (correct) {
               m.status = "correct";
               m.place = ++s.correctCount;

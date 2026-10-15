@@ -38,6 +38,7 @@ test("solo server scores independently, rejects duplicate requests, and ranks co
     () =>
       change(service, run, a, "guess", {
         answer: answerFor(run).title,
+        songId: answerFor(run).id,
         score: 999999,
       }),
     { status: 409 },
@@ -46,6 +47,7 @@ test("solo server scores independently, rejects duplicate requests, and ranks co
   const previous = run;
   run = change(service, run, a, "guess", {
     answer: answerFor(run).title,
+    songId: answerFor(run).id,
     score: 999999,
   });
   assert.equal(run.score, 1000);
@@ -54,6 +56,7 @@ test("solo server scores independently, rejects duplicate requests, and ranks co
     () =>
       change(service, previous, a, "guess", {
         answer: answerFor(previous).title,
+        songId: answerFor(previous).id,
       }),
     { status: 409 },
   );
@@ -71,11 +74,17 @@ test("wrong guesses unlock stages, replay does not unlock, final miss yields zer
   run = change(service, run, a, "play");
   assert.equal(run.points, 1000);
   for (const seconds of [6, 12, 18, 24, 30]) {
-    run = change(service, run, a, "guess", { answer: "wrong" });
+    run = change(service, run, a, "guess", {
+      answer: "wrong",
+      songId: songs.find((s) => s.id !== answerFor(run).id).id,
+    });
     assert.equal(run.clipSeconds, seconds);
     assert.equal(run.status, "playing");
   }
-  run = change(service, run, a, "guess", { answer: "wrong" });
+  run = change(service, run, a, "guess", {
+    answer: "wrong",
+    songId: songs.find((s) => s.id !== answerFor(run).id).id,
+  });
   assert.equal(run.status, "revealed");
   assert.equal(run.score, 0);
   assert.equal(run.lastResult.correct, false);
@@ -98,6 +107,43 @@ test("endless deck uses each unique song before recycling and avoids consecutive
   db.close();
 });
 
+test("wrong guesses persist, reject duplicates, and are archived per round", () => {
+  const { db, service, a } = setup();
+  let run = service.create("run", a, {});
+  run = change(service, run, a, "play");
+  const previous = run;
+  const wrongSong = songs.find((song) => song.id !== answerFor(run).id);
+  run = change(service, run, a, "guess", {
+    answer: "typed text",
+    songId: wrongSong.id,
+  });
+  assert.deepEqual(run.wrongGuesses, [wrongSong.title]);
+  assert.throws(
+    () => change(service, previous, a, "guess", { answer: "duplicate" }),
+    { status: 409 },
+  );
+  const restored = createGameService({ db, getPublishedSongs: () => songs });
+  run = restored.get(run.id, a);
+  assert.deepEqual(run.wrongGuesses, [wrongSong.title]);
+  run = change(restored, run, a, "guess", {
+    answer: wrongSong.title,
+    songId: wrongSong.id,
+  });
+  run = change(restored, run, a, "guess", {
+    answer: answerFor(run).title,
+    songId: answerFor(run).id,
+  });
+  assert.deepEqual(run.wrongGuesses, [wrongSong.title, wrongSong.title]);
+  assert.deepEqual(run.history[0].wrongGuesses, run.wrongGuesses);
+  run = change(restored, run, a, "next");
+  assert.deepEqual(run.wrongGuesses, []);
+  assert.deepEqual(run.history[0].wrongGuesses, [
+    wrongSong.title,
+    wrongSong.title,
+  ]);
+  db.close();
+});
+
 test("rooms keep answer and score secret until both finish; both ready is required", () => {
   const { db, service, a, b } = setup();
   let host = service.create("room", a, {});
@@ -110,7 +156,10 @@ test("rooms keep answer and score secret until both finish; both ready is requir
   assert.throws(() => service.join(host.code, c), { status: 409 });
   host = change(service, host, a, "play");
   const staleHost = host;
-  host = change(service, host, a, "guess", { answer: answerFor(host).title });
+  host = change(service, host, a, "guess", {
+    answer: answerFor(host).title,
+    songId: answerFor(host).id,
+  });
   assert.equal(host.me.done, true);
   assert.equal(host.answer, null);
   assert.equal(host.results, null);
@@ -128,6 +177,7 @@ test("rooms keep answer and score secret until both finish; both ready is requir
     () =>
       change(service, staleHost, a, "guess", {
         answer: answerFor(staleHost).title,
+        songId: answerFor(staleHost).id,
       }),
     { status: 409 },
   );
@@ -187,12 +237,18 @@ test("short audio clamps stages, invalid inputs and forged identities are reject
   let run = service.create("run", a, {});
   assert.throws(() => service.get(run.id, b), { status: 403 });
   run = change(service, run, a, "play", { duration: 4 });
-  run = change(service, run, a, "guess", { answer: "wrong" });
+  run = change(service, run, a, "guess", {
+    answer: "wrong",
+    songId: songs.find((s) => s.id !== answerFor(run).id).id,
+  });
   assert.equal(run.clipSeconds, 4);
   assert.equal(run.points, 800);
   run = change(service, run, a, "play", { duration: 90 });
   assert.equal(run.clipSeconds, 4);
-  run = change(service, run, a, "guess", { answer: answerFor(run).title });
+  run = change(service, run, a, "guess", {
+    answer: answerFor(run).title,
+    songId: answerFor(run).id,
+  });
   assert.equal(run.score, 800);
   db.close();
 });
@@ -202,7 +258,10 @@ test("long endless runs keep only recent history while score and ranking totals 
   let run = service.create("run", a, { mode: "endless" });
   for (let index = 0; index < 61; index++) {
     run = change(service, run, a, "play");
-    run = change(service, run, a, "guess", { answer: answerFor(run).title });
+    run = change(service, run, a, "guess", {
+      answer: answerFor(run).title,
+      songId: answerFor(run).id,
+    });
     if (index < 60) run = change(service, run, a, "next");
   }
   assert.equal(run.history.length, 50);
@@ -241,7 +300,10 @@ test("presence is shared across reconnecting tabs and duplicate ready cannot ski
   stopB(); // A delayed duplicate close must not remove the new connection.
   assert.equal(service.get(host.code, b).players[0].connected, true);
   host = change(service, service.get(host.code, a), a, "play");
-  host = change(service, host, a, "guess", { answer: answerFor(host).title });
+  host = change(service, host, a, "guess", {
+    answer: answerFor(host).title,
+    songId: answerFor(host).id,
+  });
   let guest = service.get(host.code, b);
   assert.deepEqual(
     guest.players.map((player) => player.score),
@@ -298,7 +360,10 @@ test("public solo receipts are owner-only, immutable, sanitized and restored aft
   });
   for (let i = 0; i < 25; i++) {
     run = change(service, run, a, "play");
-    run = change(service, run, a, "guess", { answer: answerFor(run).title });
+    run = change(service, run, a, "guess", {
+      answer: answerFor(run).title,
+      songId: answerFor(run).id,
+    });
     if (i < 24) run = change(service, run, a, "next");
   }
   run = change(service, run, a, "finish");
@@ -378,7 +443,10 @@ test("duel receipts preserve each member perspective and reject unfinished revea
   let host = service.create("room", a, { mode: "endless" });
   service.join(host.code, b);
   host = change(service, service.get(host.code, a), a, "play");
-  host = change(service, host, a, "guess", { answer: answerFor(host).title });
+  host = change(service, host, a, "guess", {
+    answer: answerFor(host).title,
+    songId: answerFor(host).id,
+  });
   let guest = change(service, service.get(host.code, b), b, "reveal");
   assert.throws(() => service.createResult(a, { sessionId: host.code }), {
     status: 409,
@@ -417,7 +485,10 @@ test("ending mid-round banks completed answers, freezes unfinished side and conc
   const room = service.create("room", a, { mode: "classic" });
   service.join(room.code, b);
   let host = change(service, service.get(room.code, a), a, "play");
-  host = change(service, host, a, "guess", { answer: answerFor(host).title });
+  host = change(service, host, a, "guess", {
+    answer: answerFor(host).title,
+    songId: answerFor(host).id,
+  });
   assert.equal(host.me.score, 0);
   const staleGuest = service.get(room.code, b);
   const ended = change(service, staleGuest, b, "finish");
@@ -443,6 +514,7 @@ test("ending mid-round banks completed answers, freezes unfinished side and conc
     () =>
       change(service, staleGuest, b, "guess", {
         answer: answerFor(host).title,
+        songId: answerFor(host).id,
       }),
     { status: 409 },
   );
@@ -490,7 +562,10 @@ test("ending revealed or partially ready rounds never awards their points twice"
     const room = service.create("room", a, { mode: "endless" });
     service.join(room.code, b);
     let host = change(service, service.get(room.code, a), a, "play");
-    host = change(service, host, a, "guess", { answer: answerFor(host).title });
+    host = change(service, host, a, "guess", {
+      answer: answerFor(host).title,
+      songId: answerFor(host).id,
+    });
     change(service, service.get(room.code, b), b, "reveal");
     if (ready) change(service, service.get(room.code, a), a, "ready");
     const ended = change(service, service.get(room.code, b), b, "leave");
@@ -516,7 +591,10 @@ test("legacy closed rooms recover final summaries without awarding formerly pend
   const room = service.create("room", a, {});
   service.join(room.code, b);
   let host = change(service, service.get(room.code, a), a, "play");
-  host = change(service, host, a, "guess", { answer: answerFor(host).title });
+  host = change(service, host, a, "guess", {
+    answer: answerFor(host).title,
+    songId: answerFor(host).id,
+  });
   const old = JSON.parse(
     db.prepare("SELECT value FROM game_states WHERE id=?").get(room.code).value,
   );
@@ -542,7 +620,10 @@ test("ending an untouched next round preserves previous totals without revealing
   const room = service.create("room", a, { mode: "endless" });
   service.join(room.code, b);
   let host = change(service, service.get(room.code, a), a, "play");
-  host = change(service, host, a, "guess", { answer: answerFor(host).title });
+  host = change(service, host, a, "guess", {
+    answer: answerFor(host).title,
+    songId: answerFor(host).id,
+  });
   change(service, service.get(room.code, b), b, "reveal");
   change(service, service.get(room.code, a), a, "ready");
   change(service, service.get(room.code, b), b, "ready");
@@ -564,4 +645,27 @@ test("ending an untouched next round preserves previous totals without revealing
     [{ round: 1, points: 1000, correct: true }],
   );
   db.close();
+});
+
+test("solo and duel reject unselected or unpublished songs without advancing the round", () => {
+  for (const kind of ["run", "room"]) {
+    const { db, service, a, b } = setup();
+    let state = service.create(kind, a, {});
+    if (kind === "room") state = service.join(state.code, b);
+    state = change(service, state, a, "play");
+    const before = service.get(state.code || state.id, a);
+    for (const songId of [undefined, 99999, "1"]) {
+      assert.throws(
+        () =>
+          change(service, before, a, "guess", {
+            answer: answerFor(before).title,
+            songId,
+          }),
+        { status: 400 },
+      );
+      assert.deepEqual(service.get(state.code || state.id, a), before);
+    }
+    service.close();
+    db.close();
+  }
 });
