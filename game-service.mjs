@@ -1,5 +1,6 @@
 import { randomBytes, createHash, randomInt } from "node:crypto";
 import { networkInterfaces } from "node:os";
+import { makePartyPatch } from "./party-wire.mjs";
 import {
   createPartyService,
   roomTimeouts,
@@ -109,6 +110,7 @@ function settings(input) {
 export function createGameService({
   db,
   getPublishedSongs,
+  getPublishedSong,
   now = () => Date.now(),
   timeouts = ROOM_TIMEOUTS,
 }) {
@@ -121,7 +123,13 @@ export function createGameService({
   );`);
   const listeners = new Map();
   const deadlines = roomTimeouts(listeners, now, timeouts);
-  const party = createPartyService({ db, getPublishedSongs, now, timeouts });
+  const party = createPartyService({
+    db,
+    getPublishedSongs,
+    getPublishedSong,
+    now,
+    timeouts,
+  });
   const digest = (value) => createHash("sha256").update(value).digest("hex");
   const save = (s) => {
     s.history = s.history.slice(s.kind === "room" ? -100 : -50);
@@ -754,6 +762,7 @@ export function createGameService({
 export function createGameplayHandler({
   db,
   getPublishedSongs,
+  getPublishedSong,
   body,
   json,
   sameOrigin,
@@ -761,7 +770,13 @@ export function createGameplayHandler({
   now = () => Date.now(),
   timeouts = ROOM_TIMEOUTS,
 }) {
-  const service = createGameService({ db, getPublishedSongs, now, timeouts }),
+  const service = createGameService({
+      db,
+      getPublishedSongs,
+      getPublishedSong,
+      now,
+      timeouts,
+    }),
     limits = new Map(),
     streams = new Set();
   const maintenance = setInterval(() => {
@@ -772,7 +787,7 @@ export function createGameplayHandler({
     }
   }, 10_000);
   maintenance.unref();
-  function openStream(res, subscribe, snapshot) {
+  function openStream(res, subscribe, snapshot, compact = false) {
     // HTTP 204 tells EventSource not to reconnect an already-finished room.
     if (["finished", "closed"].includes(snapshot.status)) {
       res.writeHead(204);
@@ -814,8 +829,15 @@ export function createGameplayHandler({
     });
     write("retry: 2000\n\n");
     streams.add(finish);
+    let previous;
     unsubscribe = subscribe((state) => {
-      write(`event: state\ndata: ${JSON.stringify(state)}\n\n`);
+      const terminal = ["finished", "closed"].includes(state.status);
+      const patch = compact && previous && !terminal;
+      const payload = patch ? makePartyPatch(previous, state) : state;
+      write(
+        `event: ${patch ? "patch" : "state"}\ndata: ${JSON.stringify(payload)}\n\n`,
+      );
+      previous = state;
       if (["finished", "closed"].includes(state.status)) {
         write("event: closed\ndata: {}\n\n");
         finish();
@@ -945,6 +967,7 @@ export function createGameplayHandler({
             res,
             (callback) => service.party.subscribe(code, p, callback),
             snapshot,
+            url.searchParams.get("compact") === "1",
           );
           return true;
         }

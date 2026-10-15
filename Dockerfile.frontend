@@ -2,7 +2,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY index.html vite.config.js ./
+COPY index.html vite.config.js party-wire.mjs ./
 COPY src ./src
 COPY public ./public
 COPY scripts/build-pwa.mjs ./scripts/build-pwa.mjs

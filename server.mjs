@@ -135,7 +135,12 @@ function fromApple(song, category = 'other', region = 'other') {
 const getChart = createCharts({ lookup: async ids => (await apple('/lookup', { id: ids.join(','), limit: '200' })).map(song => fromApple(song)).filter(Boolean) });
 const publishedQuery = db.prepare(`SELECT ${columns} FROM songs WHERE status='published' AND categoryReview=0 ORDER BY artist,title`);
 const getPublishedSongs = () => publishedQuery.all().filter(song => !excludedVersionReason(song));
-const gameplay = createGameplayHandler({ db, body, json, sameOrigin, production, getPublishedSongs });
+const publishedSongQuery = db.prepare(`SELECT ${columns} FROM songs WHERE id=? AND status='published' AND categoryReview=0`);
+const getPublishedSong = id => {
+  const song = publishedSongQuery.get(id);
+  return song && !excludedVersionReason(song) ? song : undefined;
+};
+const gameplay = createGameplayHandler({ db, body, json, sameOrigin, production, getPublishedSongs, getPublishedSong });
 const serveStatic = process.env.SERVE_STATIC !== 'false';
 const staticFiles = new Map(serveStatic ? [
   ['/', 'index.html'], ['/index.html', 'index.html'], ['/admin', 'index.html'], ['/admin/', 'index.html'], ['/leaderboard', 'index.html'], ['/duel', 'index.html'], ['/party', 'index.html']

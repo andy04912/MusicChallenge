@@ -1,3 +1,4 @@
+import { applyPartyPatch } from "../../party-wire.mjs";
 // A route owns one stream. Cleanup detaches callbacks before close so queued
 // events from the previous room cannot update the next page or reconnect it.
 export function subscribeLive(
@@ -60,6 +61,7 @@ export function subscribeLive(
   }
   function connect() {
     const stream = new EventSource(path);
+    let snapshot;
     source = stream;
     const current = () => !stopped && source === stream;
     function disconnected() {
@@ -85,11 +87,24 @@ export function subscribeLive(
       if (!current()) return;
       try {
         const state = JSON.parse(event.data);
+        snapshot = state;
         healthy();
         if (["finished", "closed"].includes(state.status)) close();
         onState(state);
       } catch {
         disconnected();
+      }
+    });
+    stream.addEventListener("patch", (event) => {
+      if (!current()) return;
+      try {
+        snapshot = applyPartyPatch(snapshot, JSON.parse(event.data));
+        healthy();
+        onState(snapshot);
+      } catch {
+        // Do not continue with a partial roster or guess against stale state.
+        // Manual reconnect fetches a full state and creates a fresh stream.
+        expire();
       }
     });
   }

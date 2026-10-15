@@ -7,6 +7,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { applyPartyPatch } from "../party-wire.mjs";
 
 test(
   "50 independent HTTP players receive role-safe SSE, ordered scores, and persisted public party results",
@@ -158,13 +159,36 @@ test(
       (song) => song.preview === room.preview.preview,
     );
     assert.ok(target);
+    // An autocomplete ID must still refer to a currently published song.
+    const catalogDb = new DatabaseSync(join(dir, "songs.sqlite"));
+    catalogDb
+      .prepare("UPDATE songs SET status='draft' WHERE id=?")
+      .run(target.id);
+    const draftGuess = await (
+      await request(
+        `/api/parties/${room.code}/guess`,
+        players[0].cookie,
+        "POST",
+        { roundId: room.roundId, songId: target.id, answer: target.title },
+      )
+    ).json();
+    assert.equal(draftGuess.me.status, "guessing");
+    assert.equal(draftGuess.me.score, 0);
+    catalogDb
+      .prepare("UPDATE songs SET status='published' WHERE id=?")
+      .run(target.id);
+    catalogDb.close();
     await Promise.all(
-      players.slice(0, 50).map(async (p) => {
+      players.slice(0, 50).map(async (p, index) => {
         const abort = new AbortController(),
-          response = await fetch(origin + `/api/parties/${room.code}/events`, {
-            headers: { Cookie: p.cookie },
-            signal: abort.signal,
-          });
+          response = await fetch(
+            origin +
+              `/api/parties/${room.code}/events${index % 2 ? "?compact=1" : ""}`,
+            {
+              headers: { Cookie: p.cookie },
+              signal: abort.signal,
+            },
+          );
         assert.equal(response.status, 200);
         assert.match(
           response.headers.get("content-type"),
@@ -176,6 +200,9 @@ test(
           count: 0,
           pump: null,
           error: null,
+          compact: index % 2 === 1,
+          bytes: 0,
+          patches: 0,
         };
         streams.push(stream);
         const reader = response.body.getReader();
@@ -186,6 +213,7 @@ test(
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
+              stream.bytes += value.byteLength;
               pending += decoder.decode(value, { stream: true });
               let boundary;
               while ((boundary = pending.indexOf("\n\n")) >= 0) {
@@ -195,7 +223,16 @@ test(
                   .split("\n")
                   .find((line) => line.startsWith("data: "));
                 if (!data) continue;
-                const snapshot = JSON.parse(data.slice(6));
+                if (
+                  !frame.includes("event: state") &&
+                  !frame.includes("event: patch")
+                )
+                  continue;
+                const patch = frame.includes("event: patch");
+                if (patch) stream.patches++;
+                const snapshot = patch
+                  ? applyPartyPatch(stream.latest, JSON.parse(data.slice(6)))
+                  : JSON.parse(data.slice(6));
                 assert.equal(snapshot.preview, null);
                 assert.ok(!JSON.stringify(snapshot).includes(target.preview));
                 assert.ok(
@@ -212,10 +249,11 @@ test(
       }),
     );
     const responses = await Promise.all(
-      players.slice(0, 50).map((p) =>
+      players.slice(0, 50).map((p, index) =>
         request(`/api/parties/${room.code}/guess`, p.cookie, "POST", {
           roundId: room.roundId,
           answer: target.title,
+          ...(index % 2 ? { songId: target.id } : {}),
           score: 999999,
         }),
       ),
@@ -237,6 +275,27 @@ test(
     assert.ok(streams.every((s) => s.latest?.status === "revealed"));
     assert.ok(streams.every((s) => !s.error));
     assert.ok(streams.every((s) => s.count >= 2));
+    assert.ok(streams.filter((s) => s.compact).every((s) => s.patches > 0));
+    assert.ok(streams.filter((s) => !s.compact).every((s) => s.patches === 0));
+    const transferred = (compact) =>
+      streams
+        .filter((s) => s.compact === compact)
+        .reduce((sum, s) => sum + s.bytes, 0);
+    assert.ok(
+      transferred(true) < transferred(false) * 0.35,
+      "compact clients receive less than 35% of legacy bytes for simultaneous correct answers",
+    );
+    const authoritative = (
+      await (
+        await request(`/api/parties/${room.code}`, players[0].cookie)
+      ).json()
+    ).players;
+    assert.ok(
+      streams.every(
+        (s) =>
+          JSON.stringify(s.latest.players) === JSON.stringify(authoritative),
+      ),
+    );
     room = await (
       await request(`/api/parties/${room.code}`, host.cookie)
     ).json();

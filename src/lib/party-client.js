@@ -10,7 +10,7 @@ export const partyAction = (room, action, body = {}, options = {}) =>
   });
 export function subscribeParty(code, onState, onConnection, onExpired) {
   return subscribeLive(
-    partyPath(code, "events"),
+    `${partyPath(code, "events")}?compact=1`,
     onState,
     onConnection,
     onExpired,
