@@ -888,7 +888,7 @@ export default function PartyPage() {
                 <>
                   <h2>聽現場，猜這首。</h2>
                   <p role="status">
-                    {me?.feedback || "歌名或歌手都能搜尋，答錯可以繼續猜。"}
+                    {me?.feedback || "搜尋歌名或歌手，選取後送出；答錯可以繼續猜。"}
                   </p>
                   <GuessInput
                     key={`${room.roundId}-${attempt}`}

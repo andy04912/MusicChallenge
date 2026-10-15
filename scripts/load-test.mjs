@@ -234,6 +234,15 @@ async function createRoom(index) {
       rooms.map(({ host, code, roundId }) => ({ host, code, roundId })),
     ),
   );
+  // Use a published song from the other language pool for a valid wrong guess.
+  const catalog = (await req("/api/catalog")).data;
+  room.wrongSong = catalog.find(
+    (song) => song.region === (index % 2 ? "kr" : "tw"),
+  );
+  if (!room.wrongSong)
+    throw new Error(
+      "Load test requires a published song in both language pools",
+    );
   await openStream(room, host);
   await pool(Array.from({ length: 50 }), 5, async () => {
     await guard();
@@ -300,7 +309,8 @@ async function phaseRun(name, duration, rate) {
           : n % 5 === 1
             ? req("/api/leaderboard?mode=endless")
             : action(member.room, "guess", member.cookie, {
-                answer: "load-test-deliberately-wrong-928573",
+                answer: member.room.wrongSong.title,
+                songId: member.room.wrongSong.id,
               });
       const p = operation.catch(() => {}).finally(() => pending.delete(p));
       pending.add(p);

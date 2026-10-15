@@ -66,7 +66,7 @@ test("large party catalog is stored once, legacy rooms migrate atomically and su
     "CREATE TRIGGER fail_party BEFORE INSERT ON game_states WHEN NEW.kind='party' BEGIN SELECT RAISE(ABORT,'simulated storage failure'); END",
   );
   assert.throws(
-    () => mutate(a, "guess", { answer: target.title }),
+    () => mutate(a, "guess", { answer: target.title, songId: target.id }),
     /simulated storage failure/,
   );
   assert.equal(
@@ -75,7 +75,7 @@ test("large party catalog is stored once, legacy rooms migrate atomically and su
   );
   assert.equal(service.party.get(room.code, a).me.score, 0);
   db.exec("DROP TRIGGER fail_party");
-  mutate(a, "guess", { answer: target.title });
+  mutate(a, "guess", { answer: target.title, songId: target.id });
   assert.equal(stored().storageVersion, 2);
   assert.equal(
     db.prepare("SELECT count(*) AS n FROM party_catalogs").get().n,
@@ -84,7 +84,10 @@ test("large party catalog is stored once, legacy rooms migrate atomically and su
   const assetBefore = db
     .prepare("SELECT value FROM party_catalogs")
     .get().value;
-  mutate(b, "guess", { answer: "wrong" });
+  mutate(b, "guess", {
+    answer: "wrong",
+    songId: songs.find((s) => s.id !== target.id).id,
+  });
   assert.equal(
     db.prepare("SELECT value FROM party_catalogs").get().value,
     assetBefore,

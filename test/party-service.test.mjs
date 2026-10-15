@@ -50,7 +50,11 @@ test("party roles hide host audio and reject stale actions, wrong guesses retry 
   room = action(party, room, host, "start");
   assert.equal(room.status, "playing");
   assert.throws(
-    () => action(party, room, host, "guess", { answer: answer(room) }),
+    () =>
+      action(party, room, host, "guess", {
+        songId: songs.find((s) => s.title === answer(room)).id,
+        answer: answer(room),
+      }),
     { status: 403 },
   );
   assert.throws(() => party.join(room.code, { id: "late", nickname: "Late" }), {
@@ -60,6 +64,7 @@ test("party roles hide host audio and reject stale actions, wrong guesses retry 
   assert.throws(
     () =>
       action(party, { ...room, roundId: "stale" }, a, "guess", {
+        songId: songs.find((s) => s.title === answer(room)).id,
         answer: answer(room),
       }),
     { status: 409 },
@@ -73,20 +78,28 @@ test("party roles hide host audio and reject stale actions, wrong guesses retry 
     party.subscribe(room.code, b, (x) => bEvents.push(x)),
   ];
   const counts = [hostEvents.length, aEvents.length, bEvents.length];
-  const wrong = action(party, room, a, "guess", { answer: "incorrect" });
+  const wrong = action(party, room, a, "guess", {
+    answer: "incorrect",
+    songId: songs.find((s) => s.title !== answer(room)).id,
+  });
   assert.equal(wrong.me.status, "guessing");
   assert.ok(wrong.me.feedback);
   assert.equal(hostEvents.length, counts[0]);
   assert.equal(aEvents.length, counts[1] + 1);
   assert.equal(bEvents.length, counts[2]);
   const correct = action(party, room, a, "guess", {
+    songId: songs.find((s) => s.title === answer(room)).id,
     answer: answer(room),
     score: 999999,
   });
   assert.equal(correct.me.points, 1000);
   assert.equal(correct.me.place, 1);
   assert.throws(
-    () => action(party, room, a, "guess", { answer: answer(room) }),
+    () =>
+      action(party, room, a, "guess", {
+        songId: songs.find((s) => s.title === answer(room)).id,
+        answer: answer(room),
+      }),
     { status: 409 },
   );
   const revealed = action(party, room, b, "giveup");
@@ -112,7 +125,10 @@ test("50-player capacity excludes host; correct arrival order and floor-point ra
   room = action(party, room, host, "start");
   const order = players.slice(0, 50).reverse();
   for (const player of order)
-    action(party, room, player, "guess", { answer: answer(room) });
+    action(party, room, player, "guess", {
+      songId: songs.find((s) => s.title === answer(room)).id,
+      answer: answer(room),
+    });
   const result = party.get(room.code, host);
   assert.equal(result.status, "revealed");
   assert.deepEqual(
@@ -149,7 +165,10 @@ test("party decks do not repeat before exhaustion, host finish freezes points an
   for (let i = 0; i < 5; i++) {
     heard.push(room.preview.preview);
     room = action(party, room, host, "start");
-    action(party, room, a, "guess", { answer: answer(room) });
+    action(party, room, a, "guess", {
+      songId: songs.find((s) => s.title === answer(room)).id,
+      answer: answer(room),
+    });
     if (i < 4) {
       room = action(party, room, host, "reveal");
       room = action(party, room, host, "next");
@@ -272,4 +291,32 @@ test("LAN join origins only reveal private addresses to local requests without a
     partyJoinOrigins({ headers: { host: "public.test:8080" } }, { interfaces }),
     [],
   );
+});
+
+test("party rejects unselected and unpublished songs without changing score or broadcasting", () => {
+  const {
+    db,
+    game,
+    party,
+    host,
+    players: [a],
+  } = setup(1);
+  let room = party.create(host, {});
+  party.join(room.code, a);
+  room = action(party, room, host, "start");
+  const before = party.get(room.code, a),
+    events = [];
+  const stop = party.subscribe(room.code, a, (e) => events.push(e));
+  const count = events.length;
+  for (const songId of [undefined, 99999, "1"]) {
+    assert.throws(
+      () => action(party, room, a, "guess", { answer: answer(room), songId }),
+      { status: 400 },
+    );
+    assert.deepEqual(party.get(room.code, a), before);
+    assert.equal(events.length, count);
+  }
+  stop();
+  game.close();
+  db.close();
 });

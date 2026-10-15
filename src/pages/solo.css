@@ -18,7 +18,7 @@
   margin: 18px 0 10px;
 }
 .solo-home-heading p {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--muted);
   margin: 0;
 }
@@ -28,32 +28,8 @@
   margin-bottom: 24px;
   container-type: inline-size;
 }
-/* Scale the complete arm with the home deck, including its pivot and cartridge. */
-.solo-home-record .tonearm {
-  width: 3.6cqw;
-  border-width: 0.8cqw;
-  border-radius: 4cqw;
-  box-shadow: 0.8cqw 0.8cqw 1.6cqw #0004;
-}
-.solo-home-record .tonearm::before {
-  box-sizing: border-box;
-  top: -2cqw;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 9.2cqw;
-  height: 9.2cqw;
-  border-width: 1.6cqw;
-}
-.solo-home-record .tonearm::after {
-  bottom: -4cqw;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4.8cqw;
-  height: 11.6cqw;
-  border-radius: 1.2cqw;
-}
 .solo-kicker {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.2px;
   color: var(--pink);
@@ -67,7 +43,7 @@
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   margin-bottom: 18px;
 }
 .solo-name {
@@ -77,7 +53,7 @@
 }
 .solo-name label,
 .solo-choices legend {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 .solo-name input {
@@ -115,10 +91,10 @@
   align-self: center;
 }
 .solo-mode-options strong {
-  font-size: 14px;
+  font-size: 16px;
 }
 .solo-mode-options span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
 }
 .solo-mode-options .selected,
@@ -149,7 +125,7 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--white);
-  font-size: 12px;
+  font-size: 14px;
   padding: 8px 6px;
 }
 .solo-choices:has(button:nth-child(4)) > div {
@@ -160,7 +136,7 @@
   min-height: 48px;
   width: 100%;
   justify-content: space-between;
-  font-size: 14px;
+  font-size: 16px;
   padding: 12px 16px;
 }
 .solo-setup-actions {
@@ -170,7 +146,7 @@
 }
 .solo-setup-actions > .text-button {
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 14px;
 }
 .solo-settings-summary {
   font-size: 18px;
@@ -179,7 +155,7 @@
 }
 .solo-pool-note,
 .solo-message {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   line-height: 1.4;
   margin: 8px 0 0;
@@ -203,18 +179,18 @@
   flex-shrink: 0;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 14px;
 }
 .solo-game-heading strong {
   font-size: 20px;
   font-variant-numeric: tabular-nums;
 }
 .solo-game-heading small {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
 }
 .solo-game-heading .solo-finish {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   min-height: 44px;
 }
@@ -235,7 +211,7 @@
   position: relative;
 }
 .solo-feedback {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin: 0 0 8px;
   line-height: 1.4;
@@ -246,7 +222,7 @@
 .solo-question .solo-reveal {
   display: flex;
   margin: 4px auto 0;
-  font-size: 11px;
+  font-size: 13px;
   min-height: 44px;
   color: var(--muted);
   padding: 8px 14px;
@@ -270,14 +246,14 @@
   -webkit-box-orient: vertical;
 }
 .solo-artist {
-  font-size: 14px;
+  font-size: 16px;
   margin: 0 0 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .solo-answer .apple-link {
-  font-size: 12px;
+  font-size: 14px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -309,7 +285,7 @@
 .solo-final-score span,
 .solo-results-note {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .solo-results-note {
   margin: 4px 0 16px;
@@ -337,20 +313,20 @@
   gap: 4px;
 }
 .solo-history-row strong {
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .solo-history-row span {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .solo-history-row > b {
-  font-size: 12px;
+  font-size: 14px;
 }
 .solo-history-row > a {
   display: grid;
@@ -363,7 +339,7 @@
   align-items: center;
   justify-content: center;
   gap: 20px;
-  font-size: 11px;
+  font-size: 13px;
 }
 .solo-pagination button {
   min-width: 44px;
@@ -410,7 +386,7 @@
     margin: 0 0 7px;
   }
   .solo-home-heading p {
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1.5;
   }
   .solo-step-heading {
@@ -431,7 +407,7 @@
   }
   .solo-game-heading {
     padding-bottom: 4px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .solo-game-body {
     display: flex;
@@ -456,11 +432,11 @@
     margin-block: 4px;
   }
   .solo-question .guess-form .field-label {
-    font-size: 11px;
+    font-size: 13px;
     margin-bottom: 4px;
   }
   .solo-feedback {
-    font-size: 11px;
+    font-size: 13px;
     margin-bottom: 4px;
   }
   .solo-question .solo-reveal {
@@ -479,7 +455,7 @@
     -webkit-line-clamp: 1;
   }
   .solo-artist {
-    font-size: 12px;
+    font-size: 14px;
     margin-bottom: 0;
   }
   .solo-answer .apple-link {

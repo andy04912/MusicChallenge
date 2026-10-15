@@ -203,7 +203,7 @@ test("active rooms hide shell navigation, expose help, and restore navigation wh
   expect(setGameActive).toHaveBeenLastCalledWith(true);
   source.emit({ ...snapshot, revision: 10, status: "closed" });
   await screen.findByRole("heading", { name: "房間已關閉" });
-  expect(setGameActive).toHaveBeenLastCalledWith(false);
+  await waitFor(() => expect(setGameActive).toHaveBeenLastCalledWith(false));
   page.unmount();
   expect(setGameActive).toHaveBeenLastCalledWith(false);
 });
@@ -272,12 +272,14 @@ test("play marks heard; completed answer waits without revealing until both play
   expect(input).toBeDisabled();
   await user.click(screen.getByRole("button", { name: "播放試聽" }));
   await waitFor(() => expect(input).toBeEnabled());
-  await user.type(input, "My guess");
+  await user.type(input, "Test Song");
+  await user.click(screen.getByRole("option", { name: "Test Song Singer" }));
   await user.click(screen.getByRole("button", { name: /送出/ }));
   await screen.findByRole("heading", { name: "已完成作答" });
   expect(screen.queryByText("這首歌是")).not.toBeInTheDocument();
   expect(calls.find((call) => call.url.endsWith("/guess"))?.body).toEqual({
-    answer: "My guess",
+    answer: "Test Song",
+    songId: 123,
     revision: 2,
   });
   snapshot = {

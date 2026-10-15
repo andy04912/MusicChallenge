@@ -649,6 +649,7 @@ export default function DuelPage() {
                   limit={me.clipSeconds || 1}
                   fullDuration={me.duration}
                   stagePoints={me.points ?? 1000}
+                  wrongGuesses={me.wrongGuesses}
                   onDuration={(value) => {
                     duration.current = value;
                   }}
@@ -670,7 +671,7 @@ export default function DuelPage() {
               </div>
               <div className="duel-answer">
                 <p className="duel-feedback" role="status">
-                  {me.feedback || "輸入歌名，也能搜尋歌手。"}
+                  {me.feedback || "搜尋歌名或歌手，選取後送出。"}
                 </p>
                 <GuessInput
                   key={`${room.round}-${me.stage}`}

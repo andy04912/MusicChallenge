@@ -4,7 +4,7 @@ import {
   CaretLeftIcon,
   CaretRightIcon,
 } from "@phosphor-icons/react";
-import { exactSong, normalize, searchSongs } from "../lib/game-logic.js";
+import { normalize, searchSongs } from "../lib/game-logic.js";
 
 export default function GuessInput({
   songs,
@@ -23,7 +23,7 @@ export default function GuessInput({
     restoringFocus = useRef(false),
     handledClick = useRef(null);
   const suggestions = useMemo(() => searchSongs(songs, text), [songs, text]);
-  const pageSize = 2;
+  const pageSize = 4;
   const expanded = !disabled && open && suggestions.length > 0;
   const pages = Math.ceil(suggestions.length / pageSize);
   useEffect(() => {
@@ -95,12 +95,11 @@ export default function GuessInput({
     };
   }
   function change(value) {
-    const match = !composing.current ? exactSong(songs, value) : null;
-    setText(match?.title || value);
-    setSelected(match);
+    setText(value);
+    setSelected(null);
     setActive(-1);
     setPage(0);
-    setOpen(!composing.current && !match);
+    setOpen(!composing.current);
   }
   function keyDown(event) {
     if (
@@ -137,7 +136,12 @@ export default function GuessInput({
       autoComplete="off"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!disabled && !composing.current && normalize(text)) {
+        if (
+          !disabled &&
+          !composing.current &&
+          selected &&
+          songs.includes(selected)
+        ) {
           setOpen(false);
           onGuess({ text, song: selected });
         }
@@ -192,7 +196,7 @@ export default function GuessInput({
           className="answer-submit"
           id="submit-guess"
           aria-label="送出答案"
-          disabled={disabled || !normalize(text)}
+          disabled={disabled || !selected || !songs.includes(selected)}
         >
           <ArrowRightIcon aria-hidden="true" />
           <span>送出</span>
@@ -252,8 +256,14 @@ export default function GuessInput({
           </div>
         )}
       </div>
+      {!disabled && open && normalize(text) && !suggestions.length && (
+        <p className="suggestions-panel guess-search-empty" role="status">
+          找不到歌曲，試試部分歌名或歌手名稱。
+        </p>
+      )}
       <p id="guess-help" className="sr-only">
-        直接輸入完整歌名，或用歌手搜尋。上下鍵選歌、Enter 選取，再送出答案。
+        搜尋歌名或歌手後，必須從選單選取歌曲才能送出。上下鍵選歌、Enter
+        選取，再送出答案。
       </p>
       <p id="guess-status" className="sr-only" role="status">
         {selected

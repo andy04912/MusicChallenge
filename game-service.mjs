@@ -74,6 +74,7 @@ const fresh = () => ({
   ready: false,
   lastResult: null,
   feedback: "",
+  wrongGuesses: [],
 });
 const stages = (duration) => {
   const out = [];
@@ -293,6 +294,7 @@ export function createGameService({
         done: m.done,
         ready: m.ready,
         feedback: m.feedback,
+        wrongGuesses: m.wrongGuesses || [],
         lastResult: reveal ? visibleResult(m) : null,
       };
     };
@@ -392,7 +394,12 @@ export function createGameService({
       m.score += m.lastResult.points;
       m.played++;
       m.correct += Number(correct);
-      s.history.push({ round: s.round, ...m.lastResult, song: song(s) });
+      s.history.push({
+        round: s.round,
+        ...m.lastResult,
+        song: song(s),
+        wrongGuesses: [...(m.wrongGuesses || [])],
+      });
       s.status = "revealed";
     } else if (s.members.length === 2 && s.members.every((m) => m.done)) {
       settleRoomRound(s);
@@ -409,7 +416,12 @@ export function createGameService({
       player.score += result.points;
       player.played++;
       player.correct += Number(result.correct);
-      s.history.push({ round: s.round, playerId: player.id, ...result });
+      s.history.push({
+        round: s.round,
+        playerId: player.id,
+        ...result,
+        wrongGuesses: [...(player.wrongGuesses || [])],
+      });
     }
   }
   function endRoom(s, actor) {
@@ -503,16 +515,19 @@ export function createGameService({
           selected = Number.isSafeInteger(input.songId)
             ? getPublishedSongs().find((song) => song.id === input.songId)
             : null;
-        const correct = Number.isSafeInteger(input.songId)
-          ? !!selected &&
-            norm(selected.title) === norm(target.title) &&
-            norm(selected.artist) === norm(target.artist)
-          : norm(input.answer) === norm(target.title);
+        if (!selected) throw fail(400, "請從搜尋選單選擇歌曲。");
+        const correct =
+          norm(selected.title) === norm(target.title) &&
+          norm(selected.artist) === norm(target.artist);
+        if (!correct) {
+          m.wrongGuesses ??= [];
+          m.wrongGuesses.push(selected?.title || input.answer.trim());
+        }
         if (correct || m.stage === stages(m.duration).length - 1)
           resolveRound(s, m, correct);
         else {
           m.stage++;
-          m.feedback = "還沒猜中，片段已延長。";
+          m.feedback = "沒猜中，片段已延長。";
         }
       } else throw fail(404, "找不到這個操作。");
     }

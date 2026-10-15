@@ -8,6 +8,8 @@ node scripts/load-test.mjs --origin=https://music-challenge.zeabur.app --confirm
 
 Each room contains 50 independent players and one host, each with its own SSE connection. Stages include 20 seconds of idle connections, 30 seconds of mixed traffic (60% deliberately wrong guesses, 20% catalog reads, 20% leaderboard reads), and concurrent all-member updates. Give-up actions exercise room-wide fan-out without fabricating correct scores. The generator never loads the music previews.
 
+Both language pools must contain published songs. Wrong guesses now submit a published song ID from the other language pool, matching the game's requirement to select a song from autocomplete instead of submitting arbitrary text.
+
 - `--profile=idle` tests connections and health probes only, after creating/starting the rooms.
 - `--profile=fanout` skips the mixed traffic, retaining idle and broadcast phases.
 - `--compact=1` opts into the new party delta stream; the default remains legacy full snapshots for an explicit baseline.

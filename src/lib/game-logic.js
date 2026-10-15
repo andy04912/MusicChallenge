@@ -88,26 +88,48 @@ export function exactSong(songs, query) {
   // Different singers with the same title still require an explicit choice.
   return matches?.length === 1 ? matches[0] : null;
 }
-export function searchSongs(songs, query, limit = 8) {
+export function searchSongs(songs, query, limit = Infinity) {
   const q = normalize(query);
   if (!q) return [];
-  const { entries, titles } = songSearchIndex(songs);
-  const result = [...(titles.get(q) || [])].slice(0, limit);
-  for (const { song, title, artist, artistTitle, titleArtist } of entries) {
-    if (result.length >= limit) break;
-    if (
-      title !== q &&
-      (title.includes(q) ||
-        artist.includes(q) ||
-        artistTitle.includes(q) ||
-        titleArtist.includes(q))
-    )
-      result.push(song);
-  }
-  return result;
+  const tokens = String(query)
+    .normalize("NFKC")
+    .split(/[\p{P}\p{Z}\p{S}\s]+/u)
+    .map(normalize)
+    .filter(Boolean);
+  const { entries } = songSearchIndex(songs);
+  return entries
+    .map((entry) => {
+      const { title, artist, artistTitle, titleArtist } = entry;
+      const rank =
+        title === q
+          ? 0
+          : title.startsWith(q)
+            ? 1
+            : artist === q
+              ? 2
+              : title.includes(q)
+                ? 3
+                : artist.startsWith(q)
+                  ? 4
+                  : artist.includes(q)
+                    ? 5
+                    : artistTitle.includes(q) || titleArtist.includes(q)
+                      ? 6
+                      : tokens.length > 1 &&
+                          tokens.every(
+                            (token) =>
+                              title.includes(token) || artist.includes(token),
+                          )
+                        ? 7
+                        : Infinity;
+      return { ...entry, rank };
+    })
+    .filter((entry) => Number.isFinite(entry.rank))
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, limit)
+    .map((entry) => entry.song);
 }
 export function isCorrectGuess(answer, text, selectedSong = null) {
   if (selectedSong) return songKey(answer) === songKey(selectedSong);
-  const input = normalize(text);
-  return !!input && input === normalize(answer.title);
+  return false;
 }

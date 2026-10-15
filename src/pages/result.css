@@ -13,7 +13,7 @@
   flex-shrink: 0;
 }
 .result-heading p {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.15em;
   color: var(--pink);
   margin: 0 0 7px;
@@ -57,7 +57,7 @@
   background: var(--soft-accent);
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 15px;
 }
 .result-tools {
   min-width: 0;
@@ -74,7 +74,7 @@
 }
 .result-caption p {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--muted);
 }
 .result-actions {
@@ -96,7 +96,7 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -121,14 +121,14 @@
 .result-notice {
   min-height: 32px;
   margin: 0;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
 }
 .result-render-error p,
 .share-result-error {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
   color: var(--pink);
 }
@@ -165,7 +165,7 @@
 .result-finished-actions > .primary {
   min-height: 46px;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 15px;
   margin: 0;
 }
 .solo-results .result-finished-actions {
@@ -215,14 +215,14 @@
   .result-actions a {
     min-height: 44px;
     padding: 8px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .result-link {
     min-height: 30px;
     padding: 4px 0;
   }
   .result-notice {
-    font-size: 10px;
+    font-size: 12px;
     min-height: 28px;
   }
   .result-finished-actions {
@@ -230,7 +230,7 @@
   }
   .result-finished-actions > .primary,
   .result-finished-actions .share-result-button {
-    font-size: 12px;
+    font-size: 14px;
     padding: 8px;
     min-height: 44px;
   }

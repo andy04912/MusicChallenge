@@ -92,11 +92,11 @@ test("autocomplete searches artist, title and combined text; deduplicates album 
   assert.equal(searchSongs(filterPool(songs, "kr"), "周杰倫").length, 0);
   assert.equal(searchSongs(songs, "周杰倫", 1).length, 1);
 });
-test("free text tolerates punctuation, casing and fullwidth but not partial titles or artist-only guesses", () => {
-  assert.equal(isCorrectGuess(songs[2], " ＨＯＷ you-like that! "), true);
+test("free text cannot be scored without a selected song", () => {
+  assert.equal(isCorrectGuess(songs[2], " ＨＯＷ you-like that! "), false);
   assert.equal(isCorrectGuess(songs[2], "BLACKPINK"), false);
   assert.equal(isCorrectGuess(songs[2], "How You"), false);
-  assert.equal(isCorrectGuess(songs[0], "七里香"), true);
+  assert.equal(isCorrectGuess(songs[0], "七里香"), false);
   assert.equal(isCorrectGuess(songs[0], "？！"), false);
 });
 test("selected songs accept another album version but reject a different artist with the same title", () => {
@@ -127,4 +127,17 @@ test("clip tiers preserve scores and stop at the actual preview length", () => {
   assert.deepEqual(stagesForDuration(0.5), [{ seconds: 0.5, points: 1000 }]);
   assert.equal(stagesForDuration(90).at(-1).seconds, 90);
   assert.equal(stagesForDuration(NaN).at(-1).seconds, 30);
+});
+
+test("search returns all artist songs and ranks exact titles before partial and token matches", () => {
+  const tracks = Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    title: `Song ${i}`,
+    artist: "Singer",
+  }));
+  assert.equal(searchSongs(tracks, "Singer").length, 20);
+  assert.equal(searchSongs(tracks, "Song 1")[0].id, 1);
+  assert.equal(searchSongs(tracks, "1 Singer Song")[0].id, 1);
+  assert.equal(searchSongs(tracks, "ｓｉｎｇｅｒ　ｓｏｎｇ　１９")[0].id, 19);
+  assert.equal(searchSongs(tracks, "missing").length, 0);
 });

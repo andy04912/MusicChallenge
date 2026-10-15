@@ -279,11 +279,13 @@ test("participants never create audio and can retry wrong answers then explicitl
   expect(
     screen.queryByRole("button", { name: /播放/ }),
   ).not.toBeInTheDocument();
-  await user.type(input, "wrong one");
+  await user.type(input, "One Song");
+  await user.click(screen.getByRole("option", { name: "One Song Singer" }));
   await user.click(screen.getByRole("button", { name: /送出/ }));
   await screen.findByText("還沒猜中，再試一次。");
   input = screen.getByRole("combobox", { name: "你的答案" });
-  await user.type(input, "wrong two");
+  await user.type(input, "One Song");
+  await user.click(screen.getByRole("option", { name: "One Song Singer" }));
   await user.click(screen.getByRole("button", { name: /送出/ }));
   await waitFor(() =>
     expect(calls.filter((call) => call.url.endsWith("/guess"))).toHaveLength(2),

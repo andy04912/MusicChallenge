@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PlayIcon, PauseIcon, PlusIcon } from "@phosphor-icons/react";
+import { PlayIcon, PauseIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { ClipAudio } from "../lib/clip-audio.js";
 import Turntable from "./Turntable.jsx";
 
@@ -17,6 +17,7 @@ export default function PreviewPlayer({
   disabled = false,
   children,
   aboveRecord,
+  wrongGuesses = [],
 }) {
   const engine = useRef(null),
     progress = useRef(null),
@@ -122,7 +123,13 @@ export default function PreviewPlayer({
     } else void start(revealed ? Infinity : limit);
   }
   return (
-    <div className="listen-panel">
+    <div
+      className="listen-panel"
+      style={{
+        "--wrong-guesses-height": `${wrongGuesses.length ? wrongGuesses.length * 22 + 8 : 0}px`,
+        "--compact-wrong-guesses-height": `${wrongGuesses.length ? Math.ceil(wrongGuesses.length / 2) * 22 + 8 : 0}px`,
+      }}
+    >
       {aboveRecord}
       <Turntable
         playing={playing}
@@ -217,6 +224,20 @@ export default function PreviewPlayer({
       )}
       <div className="source-credit">
         <p className="courtesy">Song preview provided courtesy of iTunes</p>
+        {wrongGuesses.length > 0 && (
+          <ul
+            className="wrong-guesses"
+            aria-label="本題猜錯紀錄"
+            aria-live="polite"
+          >
+            {wrongGuesses.map((title, index) => (
+              <li key={index}>
+                <XIcon weight="bold" aria-hidden="true" />
+                <span title={title}>{title}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -25,28 +25,6 @@
 .music-loading-deck .deck-status {
   display: none;
 }
-.music-loading-deck .tonearm {
-  width: 3.6cqw;
-  border-width: 0.8cqw;
-  box-shadow: 0.8cqw 0.8cqw 1.6cqw #0004;
-}
-.music-loading-deck .tonearm::before {
-  box-sizing: border-box;
-  top: -2cqw;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 9.2cqw;
-  height: 9.2cqw;
-  border-width: 1.6cqw;
-}
-.music-loading-deck .tonearm::after {
-  bottom: -4cqw;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4.8cqw;
-  height: 11.6cqw;
-  border-radius: 1.2cqw;
-}
 .music-loading > p {
   margin: 0;
   color: var(--muted);
