@@ -67,6 +67,7 @@ export function roomTimeouts(listeners, now, policy = ROOM_TIMEOUTS) {
 export function createPartyService({
   db,
   getPublishedSongs,
+  getPublishedSong = (id) => getPublishedSongs().find((song) => song.id === id),
   now = () => Date.now(),
   timeouts = ROOM_TIMEOUTS,
 }) {
@@ -78,18 +79,61 @@ export function createPartyService({
   db.exec(
     "CREATE INDEX IF NOT EXISTS game_room_status ON game_states(kind, json_extract(value, '$.status'))",
   );
-  const save = (s) =>
-    db
-      .prepare("INSERT OR REPLACE INTO game_states VALUES (?,?,?,?)")
-      .run(s.id, "party", JSON.stringify(s), now());
+  // The catalog is immutable for a room. Persist it once, rather than rewriting
+  // hundreds of full song objects on every guess. Legacy rooms migrate on write.
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS party_catalogs(id TEXT PRIMARY KEY,value TEXT NOT NULL)",
+  );
+  const saveCatalog = db.prepare(
+    "INSERT OR IGNORE INTO party_catalogs VALUES (?,?)",
+  );
+  const readCatalog = db.prepare("SELECT value FROM party_catalogs WHERE id=?");
+  const saveState = db.prepare(
+    "INSERT OR REPLACE INTO game_states VALUES (?,?,?,?)",
+  );
+  const readState = db.prepare(
+    "SELECT value,updatedAt FROM game_states WHERE id=? AND kind='party'",
+  );
+  const activeStates = db.prepare(
+    "SELECT id FROM game_states WHERE kind='party' AND json_extract(value, '$.status') IN ('lobby','ready','playing','revealed')",
+  );
+  const catalogs = new Map();
+  function catalog(id) {
+    if (!catalogs.has(id)) {
+      const row = readCatalog.get(id);
+      if (!row) throw new Error("Party catalog missing");
+      const pool = JSON.parse(row.value);
+      catalogs.set(id, { pool, songs: new Map(pool.map((s) => [s.id, s])) });
+      if (catalogs.size > 32) catalogs.delete(catalogs.keys().next().value);
+    }
+    const value = catalogs.get(id);
+    catalogs.delete(id);
+    catalogs.set(id, value);
+    return value;
+  }
+  const save = (s) => {
+    const { pool, deck, ...state } = s;
+    if (s.storageVersion !== 2) saveCatalog.run(s.id, JSON.stringify(pool));
+    saveState.run(
+      s.id,
+      "party",
+      JSON.stringify({
+        ...state,
+        storageVersion: 2,
+        deck: deck.map((song) => song.id),
+      }),
+      now(),
+    );
+  };
   const read = (id) => {
-    const row = db
-      .prepare(
-        "SELECT value,updatedAt FROM game_states WHERE id=? AND kind='party'",
-      )
-      .get(id);
+    const row = readState.get(id);
     if (!row) throw fail(404, "找不到派對房間。");
     const state = JSON.parse(row.value);
+    if (state.storageVersion === 2) {
+      const assets = catalog(id);
+      state.pool = assets.pool;
+      state.deck = state.deck.map((id) => assets.songs.get(id));
+    }
     state.lastActivityAt ??= row.updatedAt;
     return state;
   };
@@ -108,13 +152,16 @@ export function createPartyService({
         a.orderTotal - b.orderTotal ||
         a.joinOrder - b.joinOrder,
     );
+  const playerViews = new WeakMap();
   function view(s, p) {
     const isHost = s.host.id === p.id,
       mine = member(s, p),
       authorized = isHost || !!mine;
     const { preview: _privateAudio, ...publicSong } = s.deck[s.cursor];
-    const players = authorized
-      ? ranking(s).map((m, i) => ({
+    if (authorized && !playerViews.has(s))
+      playerViews.set(
+        s,
+        ranking(s).map((m, i) => ({
           id: m.id,
           nickname: m.nickname,
           status: m.status,
@@ -124,8 +171,9 @@ export function createPartyService({
           place: m.place,
           points: m.points,
           rank: i + 1,
-        }))
-      : [];
+        })),
+      );
+    const players = authorized ? playerViews.get(s) : [];
     return {
       id: s.id,
       code: s.id,
@@ -162,8 +210,10 @@ export function createPartyService({
   }
   function emit(s, onlyPlayer = null) {
     for (const [id, set] of listeners.get(s.id) || [])
-      if (!onlyPlayer || id === onlyPlayer)
-        for (const callback of set) callback(view(s, { id }));
+      if (!onlyPlayer || id === onlyPlayer) {
+        const snapshot = view(s, { id });
+        for (const callback of set) callback(snapshot);
+      }
   }
   function transaction(id, fn, recipient = () => null) {
     db.exec("BEGIN IMMEDIATE");
@@ -227,7 +277,14 @@ export function createPartyService({
       createdAt: now(),
       lastActivityAt: now(),
     };
-    save(state);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      save(state);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
     deadlines.track(state);
     return view(state, p);
   }
@@ -315,7 +372,7 @@ export function createPartyService({
               throw fail(400, "請輸入完整歌名。");
             const target = s.deck[s.cursor],
               selected = Number.isSafeInteger(input.songId)
-                ? getPublishedSongs().find((song) => song.id === input.songId)
+                ? getPublishedSong(input.songId)
                 : null;
             const correct = Number.isSafeInteger(input.songId)
               ? !!selected &&
@@ -469,12 +526,7 @@ export function createPartyService({
     });
   }
   function sweep() {
-    for (const { id } of db
-      .prepare(
-        "SELECT id FROM game_states WHERE kind='party' AND json_extract(value, '$.status') IN ('lobby','ready','playing','revealed')",
-      )
-      .all())
-      expire(id);
+    for (const { id } of activeStates.all()) expire(id);
   }
   return {
     create,
@@ -491,6 +543,7 @@ export function createPartyService({
     close: () => {
       listeners.clear();
       deadlines.clear();
+      catalogs.clear();
     },
   };
 }

@@ -1,7 +1,56 @@
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
 import { subscribeRoom } from "./room-client.js";
 import { subscribeParty } from "./party-client.js";
+import { makePartyPatch } from "../../party-wire.mjs";
 let streams;
+test("party patches preserve private state, update scores, and reconnect from a full snapshot", () => {
+  const onState = vi.fn(),
+    onExpired = vi.fn();
+  const stop = subscribeParty("code", onState, vi.fn(), onExpired);
+  expect(streams[0].path).toBe("/api/parties/code/events?compact=1");
+  const before = {
+    revision: 4,
+    status: "playing",
+    me: { id: "a", feedback: "" },
+    preview: null,
+    players: [
+      { id: "a", score: 0, rank: 1 },
+      { id: "b", score: 0, rank: 2 },
+    ],
+  };
+  const after = {
+    ...before,
+    revision: 6,
+    players: [
+      { id: "b", score: 1000, rank: 1 },
+      { id: "a", score: 0, rank: 2 },
+    ],
+  };
+  streams[0].emit("state", before);
+  streams[0].emit("patch", makePartyPatch(before, after));
+  expect(onState).toHaveBeenLastCalledWith(after);
+  window.dispatchEvent(new Event("pagehide"));
+  window.dispatchEvent(new Event("pageshow"));
+  streams[1].emit("state", after);
+  const presence = { ...after, hostConnected: false };
+  streams[1].emit("patch", makePartyPatch(after, presence));
+  expect(onState).toHaveBeenLastCalledWith(presence);
+  expect(onExpired).not.toHaveBeenCalled();
+  stop();
+});
+test("missing patch base expires rather than silently rendering a corrupt score", () => {
+  const state = vi.fn(),
+    expired = vi.fn();
+  subscribeParty("code", state, vi.fn(), expired);
+  streams[0].emit("patch", {
+    baseRevision: 9,
+    changes: { revision: 10 },
+    players: { changes: [] },
+  });
+  expect(state).not.toHaveBeenCalled();
+  expect(expired).toHaveBeenCalledTimes(1);
+  expect(streams[0].close).toHaveBeenCalledTimes(1);
+});
 beforeEach(() => {
   vi.useFakeTimers();
   vi.spyOn(document, "hidden", "get").mockReturnValue(false);
