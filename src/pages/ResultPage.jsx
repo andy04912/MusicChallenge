@@ -6,11 +6,13 @@ import {
   CopyIcon,
   DownloadSimpleIcon,
   ShareNetworkIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { request } from "../lib/api.js";
 import { createResultCard, resultFacts } from "../lib/result-card.js";
 import PartyPodium from "../components/PartyPodium.jsx";
 import "./result.css";
+const mobileQuery = "(pointer: coarse), (max-width: 767px)";
 
 export default function ResultPage() {
   const { id } = useParams(),
@@ -22,10 +24,20 @@ export default function ResultPage() {
   const [notice, setNotice] = useState(""),
     [copied, setCopied] = useState(false),
     [sharing, setSharing] = useState(false),
+    [mobile, setMobile] = useState(
+      () => window.matchMedia(mobileQuery).matches,
+    ),
     [retry, setRetry] = useState(0);
   const linkInput = useRef(null),
+    imageDialog = useRef(null),
     shareBusy = useRef(false);
-  const url = `${window.location.origin}/result/${encodeURIComponent(id || "")}`;
+  const url = `${window.location.origin}/`;
+  useEffect(() => {
+    const media = window.matchMedia(mobileQuery);
+    const update = () => setMobile(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const abort = new AbortController();
     setLoading(true);
@@ -72,6 +84,10 @@ export default function ResultPage() {
   }, [result, retry]);
   function download() {
     if (!card) return;
+    if (mobile) {
+      share(true);
+      return;
+    }
     const anchor = document.createElement("a");
     anchor.href = card.url;
     anchor.download = card.file.name;
@@ -84,24 +100,26 @@ export default function ResultPage() {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setNotice("戰果連結已複製。");
+      setNotice("遊戲首頁連結已複製，邀請朋友來挑戰！");
     } catch {
       linkInput.current?.focus();
       linkInput.current?.select();
       setNotice("請長按下方連結，手動複製。");
     }
   }
-  function share() {
+  function share(imageOnly = false) {
     if (!card || shareBusy.current) return;
-    const payload = {
-      files: [card.file],
-      title: "Music Challenge 戰果",
-      text:
-        result.type === "party"
-          ? `${result.players?.length || 0} 人的派對搶答戰果`
-          : `${result.nickname} 的音樂挑戰戰果`,
-      url,
-    };
+    const payload = imageOnly
+      ? { files: [card.file] }
+      : {
+          files: [card.file],
+          title: "Music Challenge 戰果",
+          text:
+            result.type === "party"
+              ? `${result.players?.length || 0} 人的派對搶答戰果`
+              : `${result.nickname} 的音樂挑戰戰果`,
+          url,
+        };
     // The already prepared File is passed during this click, before any await.
     let canShare = false;
     try {
@@ -111,7 +129,8 @@ export default function ResultPage() {
       /* Use the download and link buttons when capability checks fail. */
     }
     if (!canShare) {
-      setNotice("此瀏覽器不支援分享圖片，可下載圖片或複製連結。");
+      if (imageOnly) imageDialog.current?.showModal();
+      else setNotice("此瀏覽器不支援分享圖片，可儲存圖片或複製連結。");
       return;
     }
     shareBusy.current = true;
@@ -120,10 +139,12 @@ export default function ResultPage() {
     try {
       Promise.resolve(navigator.share(payload))
         .then(
-          () => setNotice("已完成分享。"),
+          () => setNotice(imageOnly ? "已交給系統處理圖片。" : "已完成分享。"),
           (err) => {
-            if (err.name !== "AbortError")
-              setNotice("未能開啟分享，請下載圖片或複製連結。");
+            if (err.name !== "AbortError") {
+              if (imageOnly) imageDialog.current?.showModal();
+              else setNotice("未能開啟分享，請儲存圖片或複製連結。");
+            }
           },
         )
         .finally(() => {
@@ -133,8 +154,10 @@ export default function ResultPage() {
     } catch (err) {
       shareBusy.current = false;
       setSharing(false);
-      if (err.name !== "AbortError")
-        setNotice("未能開啟分享，請下載圖片或複製連結。");
+      if (err.name !== "AbortError") {
+        if (imageOnly) imageDialog.current?.showModal();
+        else setNotice("未能開啟分享，請儲存圖片或複製連結。");
+      }
     }
   }
   const facts = result ? resultFacts(result) : null;
@@ -214,15 +237,15 @@ export default function ResultPage() {
             <div className="result-actions">
               <button
                 className="primary"
-                onClick={share}
+                onClick={() => share()}
                 disabled={!card || sharing}
               >
                 <ShareNetworkIcon />
                 {sharing ? "正在分享…" : "分享戰果"}
               </button>
-              <button onClick={download} disabled={!card}>
+              <button onClick={download} disabled={!card || sharing}>
                 <DownloadSimpleIcon />
-                下載圖片
+                {mobile ? "儲存圖片" : "下載圖片"}
               </button>
               <button onClick={copy}>
                 {copied ? <CheckIcon /> : <CopyIcon />}複製連結
@@ -234,7 +257,7 @@ export default function ResultPage() {
             <input
               ref={linkInput}
               className="result-link"
-              aria-label="戰果連結"
+              aria-label="遊戲首頁連結"
               readOnly
               value={url}
               onFocus={(event) => event.target.select()}
@@ -243,10 +266,35 @@ export default function ResultPage() {
               {notice ||
                 (preparing
                   ? "圖片完成後即可分享。"
-                  : "公開戰果只顯示分數，不含歌曲答案。")}
+                  : "分享圖片秀戰果，連結邀朋友直接開始玩。")}
             </p>
           </div>
         </div>
+      )}
+      {card && (
+        <dialog
+          ref={imageDialog}
+          className="result-save-dialog"
+          aria-labelledby="save-image-title"
+        >
+          <header>
+            <h2 id="save-image-title">儲存戰果圖片</h2>
+            <button
+              type="button"
+              aria-label="關閉圖片"
+              onClick={() => imageDialog.current.close()}
+            >
+              <XIcon />
+            </button>
+          </header>
+          <p>長按圖片，選擇儲存影像或加入照片。</p>
+          <img
+            src={card.url}
+            alt="可長按儲存的 Music Challenge 戰果圖片"
+            width="1080"
+            height="1350"
+          />
+        </dialog>
       )}
     </section>
   );

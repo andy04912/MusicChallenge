@@ -216,7 +216,7 @@ function drawPartyCard(ctx, result, logo, origin) {
   if (!players.length) text(ctx, "尚無參賽者戰果", 64, 672, 38, "#686167", 600);
   text(
     ctx,
-    `${facts.participants > 3 ? "呈現前三名 · " : ""}完整 ${facts.participants} 人排名請開啟戰果連結`,
+    `${facts.participants} 位玩家一起挑戰${facts.participants > 3 ? " · 呈現最終前三名" : ""}`,
     64,
     1047,
     23,
@@ -237,7 +237,6 @@ function drawPartyCard(ctx, result, logo, origin) {
     500,
     855,
   );
-  text(ctx, "↗", 971, 1286, 42, pink, 500);
 }
 export function drawResultCard(ctx, result, logo, origin) {
   if (result.type === "party") return drawPartyCard(ctx, result, logo, origin);
@@ -264,8 +263,10 @@ export function drawResultCard(ctx, result, logo, origin) {
   ctx.save();
   ctx.translate(930, 415);
   ctx.rotate(-0.12);
-  text(ctx, "GUESS", -42, -14, 19, ink, 800);
-  text(ctx, "AGAIN", -40, 25, 19, ink, 800);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  text(ctx, "GUESS", 0, -20, 19, ink, 800);
+  text(ctx, "AGAIN", 0, 20, 19, ink, 800);
   ctx.restore();
   let scoreSize = 226;
   font(ctx, scoreSize, 800, '"Barlow Condensed", Arial, sans-serif');
@@ -371,7 +372,6 @@ export function drawResultCard(ctx, result, logo, origin) {
     500,
     855,
   );
-  text(ctx, "↗", 971, 1286, 42, pink, 500);
 }
 function loadLogo() {
   return new Promise((resolve, reject) => {
@@ -392,7 +392,7 @@ export async function createResultCard(
   canvas.width = CARD_WIDTH;
   canvas.height = CARD_HEIGHT;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("瀏覽器無法產生圖片，仍可複製戰果連結。");
+  if (!ctx) throw new Error("瀏覽器無法產生圖片，仍可複製遊戲連結。");
   drawResultCard(ctx, result, logo, origin);
   return new Promise((resolve, reject) =>
     canvas.toBlob(

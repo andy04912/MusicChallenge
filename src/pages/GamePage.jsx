@@ -423,16 +423,14 @@ export default function GamePage() {
               {run.score.toLocaleString()}
               <small> 分</small>
             </strong>
+            <button
+              className="game-help"
+              aria-label="玩法說明"
+              onClick={showHelp}
+            >
+              <QuestionIcon />
+            </button>
           </div>
-        </div>
-        <div className="solo-game-help-row">
-          <button
-            className="game-help"
-            aria-label="玩法說明"
-            onClick={showHelp}
-          >
-            <QuestionIcon />
-          </button>
         </div>
       </div>
       <div className="solo-game-body">
@@ -490,7 +488,9 @@ export default function GamePage() {
               </h2>
               <p className="solo-feedback" role="status">
                 {run.feedback ||
-                  (run.heard ? "搜尋歌名或歌手，選取後送出" : "按播放，聽完再猜")}
+                  (run.heard
+                    ? "搜尋歌名或歌手，選取後送出"
+                    : "按播放，聽完再猜")}
               </p>
               <GuessInput
                 key={`${run.preview.id}-${run.stage}`}
