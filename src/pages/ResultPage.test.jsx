@@ -73,7 +73,8 @@ test("prepares one faithful PNG preview before enabling share and passes cached 
   const payload = navigator.share.mock.calls[0][0];
   expect(payload.files[0]).toBeInstanceOf(File);
   expect(payload.files[0].name).toBe("music-challenge-receipt123.png");
-  expect(payload.url).toContain("/result/receipt123");
+  expect(payload.url).toBe(`${window.location.origin}/`);
+  expect(payload.files[0].type).toBe("image/png");
   expect(createResultCard).toHaveBeenCalledTimes(1);
 });
 test("canceling native share is quiet; unsupported share keeps download and copy available", async () => {
@@ -103,10 +104,66 @@ test("failed clipboard gives a selected link instead of falsely claiming success
   open();
   await screen.findByRole("img");
   await user.click(screen.getByRole("button", { name: "複製連結" }));
-  const input = screen.getByRole("textbox", { name: "戰果連結" });
+  const input = screen.getByRole("textbox", { name: "遊戲首頁連結" });
+  expect(input).toHaveValue(`${window.location.origin}/`);
   expect(input).toHaveFocus();
   expect(input.selectionEnd).toBe(input.value.length);
   expect(screen.getByText(/手動複製/)).toBeInTheDocument();
+});
+
+function mobileScreen() {
+  vi.spyOn(window, "matchMedia").mockReturnValue({
+    matches: true,
+    addEventListener() {},
+    removeEventListener() {},
+  });
+}
+test("mobile save sends only a PNG to the system, without downloading or sharing a URL", async () => {
+  mobileScreen();
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+  const user = userEvent.setup();
+  open();
+  await screen.findByRole("img");
+  await user.click(screen.getByRole("button", { name: "儲存圖片" }));
+  expect(navigator.share).toHaveBeenCalledExactlyOnceWith({
+    files: [expect.any(File)],
+  });
+  expect(navigator.share.mock.calls[0][0].files[0].type).toBe("image/png");
+  expect(click).not.toHaveBeenCalled();
+});
+test("mobile save without file sharing opens a real image for long press", async () => {
+  mobileScreen();
+  navigator.canShare.mockReturnValue(false);
+  const user = userEvent.setup();
+  open();
+  await screen.findByRole("img");
+  const dialog = document.querySelector("dialog");
+  dialog.showModal = vi.fn(() => dialog.setAttribute("open", ""));
+  dialog.close = vi.fn(() => dialog.removeAttribute("open"));
+  await user.click(screen.getByRole("button", { name: "儲存圖片" }));
+  expect(screen.getByRole("dialog", { name: "儲存戰果圖片" })).toBeVisible();
+  expect(screen.getByRole("img", { name: /可長按儲存/ })).toHaveAttribute(
+    "src",
+    "blob:result-card",
+  );
+  expect(navigator.share).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "關閉圖片" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+test("canceling mobile image save does not show a fallback or success message", async () => {
+  mobileScreen();
+  navigator.share.mockRejectedValue(
+    new DOMException("cancelled", "AbortError"),
+  );
+  const user = userEvent.setup();
+  open();
+  await screen.findByRole("img");
+  await user.click(screen.getByRole("button", { name: "儲存圖片" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "儲存圖片" })).toBeEnabled(),
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.queryByText("已交給系統處理圖片。")).not.toBeInTheDocument();
 });
 test("export failure retains public link and supports retry, and blob URLs are released", async () => {
   createResultCard.mockRejectedValueOnce(new Error("製作失敗"));

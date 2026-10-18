@@ -23,6 +23,134 @@ function touch(element, type, x = 20, y = 20) {
   fireEvent(element, event);
 }
 describe("React autocomplete", () => {
+  test("touching a disabled paging button cannot leave the first or last page", async () => {
+    const user = userEvent.setup(),
+      guess = vi.fn();
+    const tracks = Array.from({ length: 5 }, (_, i) => ({
+      id: i + 10,
+      title: `Song ${i}`,
+      artist: "Singer",
+    }));
+    render(<GuessInput songs={tracks} onGuess={guess} />);
+    await user.type(screen.getByRole("combobox"), "Singer");
+    const previous = screen.getByRole("button", { name: "上一頁歌曲建議" });
+    touch(previous, "pointerdown");
+    touch(previous, "pointerup");
+    expect(screen.getByText("1 / 2 · 繼續輸入可縮小範圍")).toBeVisible();
+    const next = screen.getByRole("button", { name: "下一頁歌曲建議" });
+    touch(next, "pointerdown");
+    touch(next, "pointerup");
+    expect(next).toBeDisabled();
+    for (let i = 0; i < 4; i++) {
+      touch(next, "pointerdown");
+      touch(next, "pointerup");
+      fireEvent.click(next, { detail: 1 });
+    }
+    expect(screen.getByText("2 / 2 · 繼續輸入可縮小範圍")).toBeVisible();
+    expect(screen.getByRole("option", { name: "Song 4 Singer" })).toBeVisible();
+    expect(guess).not.toHaveBeenCalled();
+  });
+  test("a shrinking song pool clamps the page immediately and keeps selection usable", async () => {
+    const user = userEvent.setup(),
+      guess = vi.fn();
+    const tracks = Array.from({ length: 10 }, (_, i) => ({
+      id: i + 10,
+      title: `Song ${i}`,
+      artist: "Singer",
+    }));
+    const view = render(<GuessInput songs={tracks} onGuess={guess} />);
+    await user.type(screen.getByRole("combobox"), "Singer");
+    const next = screen.getByRole("button", { name: "下一頁歌曲建議" });
+    await user.click(next);
+    await user.click(next);
+    view.rerender(<GuessInput songs={tracks.slice(0, 5)} onGuess={guess} />);
+    expect(screen.getByText("2 / 2 · 繼續輸入可縮小範圍")).toBeVisible();
+    await user.click(screen.getByRole("option", { name: "Song 4 Singer" }));
+    await user.click(screen.getByRole("button", { name: "送出答案" }));
+    expect(guess).toHaveBeenCalledExactlyOnceWith({
+      text: "Song 4",
+      song: tracks[4],
+    });
+  });
+  function mobile() {
+    vi.spyOn(window, "matchMedia").mockImplementation(() => ({
+      matches: true,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+  }
+  test("mobile results stay paginated when the keyboard reduces available height", async () => {
+    mobile();
+    const viewport = Object.assign(new EventTarget(), { height: 500 });
+    vi.stubGlobal("visualViewport", viewport);
+    try {
+      const user = userEvent.setup();
+      const tracks = Array.from({ length: 8 }, (_, i) => ({
+        id: i + 10,
+        title: `Song ${i}`,
+        artist: "Singer",
+      }));
+      render(<GuessInput songs={tracks} onGuess={vi.fn()} />);
+      await user.type(screen.getByRole("combobox"), "Singer");
+      expect(screen.getAllByRole("option")).toHaveLength(4);
+      await user.click(screen.getByRole("button", { name: "下一頁歌曲建議" }));
+      act(() => {
+        viewport.height = 300;
+        viewport.dispatchEvent(new Event("resize"));
+      });
+      expect(screen.getAllByRole("option")).toHaveLength(2);
+      expect(
+        screen.getByRole("option", { name: "Song 0 Singer" }),
+      ).toBeVisible();
+      await user.click(screen.getByRole("button", { name: "下一頁歌曲建議" }));
+      expect(
+        screen.getByRole("option", { name: "Song 2 Singer" }),
+      ).toBeVisible();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  test("mobile touch selection closes search and keyboard without submitting", async () => {
+    mobile();
+    const user = userEvent.setup(),
+      guess = vi.fn();
+    render(<GuessInput songs={songs} onGuess={guess} />);
+    const input = screen.getByRole("combobox"),
+      form = input.closest("form");
+    await user.type(input, "周");
+    expect(form).toHaveClass("is-searching");
+    const option = screen.getByRole("option", { name: "七里香 周杰倫" });
+    touch(option, "pointerdown");
+    touch(option, "pointerup");
+    fireEvent.click(option, { detail: 1 });
+    expect(form).not.toHaveClass("is-searching");
+    expect(input).not.toHaveFocus();
+    expect(input).toHaveValue("七里香");
+    expect(guess).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "送出答案" }));
+    expect(guess).toHaveBeenCalledExactlyOnceWith({
+      text: "七里香",
+      song: songs[0],
+    });
+  });
+  test("mobile return preserves search text and still requires explicit selection", async () => {
+    mobile();
+    const user = userEvent.setup(),
+      guess = vi.fn();
+    render(<GuessInput songs={songs} onGuess={guess} />);
+    const input = screen.getByRole("combobox");
+    await user.type(input, "七里香");
+    await user.click(screen.getByRole("button", { name: "返回遊戲" }));
+    expect(input.closest("form")).not.toHaveClass("is-searching");
+    expect(input).toHaveValue("七里香");
+    expect(screen.getByRole("button", { name: "送出答案" })).toBeDisabled();
+    await user.click(input);
+    expect(input.closest("form")).toHaveClass("is-searching");
+    expect(screen.getByRole("option", { name: "七里香 周杰倫" })).toBeVisible();
+    await user.keyboard("{Escape}");
+    expect(input.closest("form")).not.toHaveClass("is-searching");
+    expect(guess).not.toHaveBeenCalled();
+  });
   test.each(["周", "七里"])(
     "touch selection survives blur and needs no synthetic click: %s",
     async (query) => {

@@ -195,7 +195,8 @@ test("party PNG uses the actual podium and total attendance, without inventing a
   expect(ctx.texts).not.toContain("Host only");
   expect(ctx.texts).not.toContain("0%");
   expect(ctx.texts).toContain("50 位參賽者 · 5 首歌 · 華語");
-  expect(ctx.texts.join(" ")).toContain("完整 50 人排名");
+  expect(ctx.texts.join(" ")).toContain("50 位玩家一起挑戰");
+  expect(ctx.texts.join(" ")).not.toContain("戰果連結");
 });
 
 test("party PNG has no invented winner for an empty party and preserves long name lines", () => {
