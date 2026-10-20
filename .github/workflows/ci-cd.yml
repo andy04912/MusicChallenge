@@ -1,0 +1,132 @@
+name: MusicChallenge CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: musicchallenge-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: 測試與建置
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: 部署工具回歸測試
+        run: python3 -B -m unittest discover -s ops -p 'test_*.py'
+      - name: 安裝依賴
+        run: npm ci
+      - name: 檢查 JavaScript 語法
+        run: npm run check
+      - name: 建置前端
+        run: npm run build
+      - name: 執行後端與前端測試
+        run: npm test
+
+  images:
+    name: 建置與發布 GHCR 映像
+    needs: [test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      backend_digest: ${{ steps.backend.outputs.digest }}
+      frontend_digest: ${{ steps.frontend.outputs.digest }}
+    env:
+      IMAGE_PREFIX: ghcr.io/andy04912/musicchallenge
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 建置並推送後端
+        id: backend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.backend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-backend:production-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=production-${{ github.sha }}
+          cache-from: type=gha,scope=backend-production
+          cache-to: type=gha,mode=max,scope=backend-production
+      - name: 建置並推送前端
+        id: frontend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.frontend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-frontend:production-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=production-${{ github.sha }}
+          cache-from: type=gha,scope=frontend-production
+          cache-to: type=gha,mode=max,scope=frontend-production
+
+  deploy:
+    name: 部署正式環境
+    needs: [test, images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: musicchallenge-production
+      cancel-in-progress: false
+    steps:
+      - name: 設定專用部署金鑰
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.MUSICCHALLENGE_VPS_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.MUSICCHALLENGE_VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/musicchallenge_deploy"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/musicchallenge_deploy" "$HOME/.ssh/known_hosts"
+      - name: 備份資料庫並由 Coolify 拉取映像、部署與檢查 HTTPS
+        env:
+          VPS_HOST: ${{ vars.MUSICCHALLENGE_VPS_HOST }}
+          VPS_USER: ${{ vars.MUSICCHALLENGE_VPS_USER }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_DIGEST: ${{ needs.images.outputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ needs.images.outputs.frontend_digest }}
+        run: |
+          python3 -c 'import json,os,sys; json.dump({"username":os.environ["GHCR_USERNAME"],"token":os.environ["GHCR_TOKEN"]},sys.stdout)' | \
+          ssh -T -i "$HOME/.ssh/musicchallenge_deploy" \
+            -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$VPS_USER@$VPS_HOST" "deploy $GITHUB_SHA $BACKEND_DIGEST $FRONTEND_DIGEST"
+      - name: 清除 runner 的部署金鑰
+        if: always()
+        run: rm -f "$HOME/.ssh/musicchallenge_deploy"
