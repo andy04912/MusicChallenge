@@ -113,9 +113,17 @@ def verify_image(image, repository, sha, environment):
 
 
 def configure_image(client, app_uuid, image_name, digest, branch, sha):
+    if not re.fullmatch(r'[A-Za-z0-9_-]+', app_uuid):
+        raise RuntimeError('Coolify 資源識別碼格式不正確')
+    # In Coolify 4.4, PATCH validates build_pack against an enum which omits
+    # dockerimage, and inline dockerfile is not an allowed PATCH field. Convert
+    # the existing resource locally once; keep its UUID, settings and storage.
+    php(f"$a=App\\Models\\Application::where('uuid','{app_uuid}')->firstOrFail();"
+        "if($a->build_pack!=='dockerimage'||$a->dockerfile!==null){"
+        "$a->forceFill(['build_pack'=>'dockerimage','dockerfile'=>null])->save();}"
+        "echo json_encode(true);")
     # Coolify 4.4 represents a digest as a sha256-<hex> image tag internally.
     client.request('PATCH', '/applications/' + app_uuid, {
-        'build_pack': 'dockerimage', 'dockerfile': None,
         'docker_registry_image_name': image_name,
         'docker_registry_image_tag': digest.replace(':', '-', 1),
         'git_branch': branch, 'git_commit_sha': sha,

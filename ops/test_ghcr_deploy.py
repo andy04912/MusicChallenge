@@ -39,10 +39,13 @@ class GHCRTests(unittest.TestCase):
 
     def test_coolify_uses_digest_and_cannot_build_from_source(self):
         client = Mock()
-        deploy.configure_image(client, 'app', 'ghcr.io/andy04912/markshare-backend', DIGEST, 'develop', SHA)
+        with patch.object(deploy, 'php', return_value=True) as converted:
+            deploy.configure_image(client, 'app', 'ghcr.io/andy04912/markshare-backend', DIGEST, 'develop', SHA)
         body = client.request.call_args.args[2]
-        self.assertEqual(body['build_pack'], 'dockerimage')
-        self.assertIsNone(body['dockerfile'])
+        self.assertIn("'build_pack'=>'dockerimage'", converted.call_args.args[0])
+        self.assertIn("'dockerfile'=>null", converted.call_args.args[0])
+        self.assertNotIn('build_pack', body)
+        self.assertNotIn('dockerfile', body)
         self.assertEqual(body['docker_registry_image_tag'], 'sha256-' + 'b' * 64)
         self.assertFalse(body['is_auto_deploy_enabled'])
 
