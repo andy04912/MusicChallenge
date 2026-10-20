@@ -9,8 +9,10 @@ https://music-challenge.damove.app，後端繼續只在容器內網提供服務�
 
 推送到 `main` 且測試通過後，GitHub-hosted runner 依兩份 Dockerfile 建置並
 推送 `ghcr.io/andy04912/musicchallenge-backend` 和
-`ghcr.io/andy04912/musicchallenge-frontend`。映像保持私有，tag 使用
-`production-<commit SHA>`，實際部署使用 build job 輸出的固定 SHA256 digest。
+`ghcr.io/andy04912/musicchallenge-frontend`。MusicChallenge 儲存庫目前為公開，
+GHCR 繼承儲存庫的公開權限；映像可匿名拉取。映像只包含原始碼與建置成品，
+不包含正式環境變數、SQLite 或備份資料。Tag 使用 `production-<commit SHA>`，
+實際部署使用 build job 輸出的固定 SHA256 digest。
 
 ## VPS 部署
 
@@ -54,6 +56,7 @@ VPS 不再安裝 npm 依賴或編譯 Vite。執行中單一後端、網路、資
 程式回復用 revert commit 重新走 CI/CD；這不會回退 SQLite 資料。
 資料還原必須停後端、另存目前資料、驗證所選備份，再還原至相同 volume。
 
-私有 image 需重新下載時，使用 GitHub workflow 取得新的短效憑證。
-Coolify UI 單獨 Redeploy／Rollback 若沒有有效 registry 登入可能無法下載映像。
+日常發布與重試使用 GitHub workflow，保留必要測試、部署前備份及 HTTPS 檢查。
+Coolify UI 可以拉取目前的公開映像，但單獨 Redeploy／Rollback 不會經過 VPS
+部署工具的資料庫備份與公開 HTTPS 檢查。
 每日與部署前備份仍保存在同台 VPS，異地備份需另外安排。
