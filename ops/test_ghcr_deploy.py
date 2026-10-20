@@ -69,6 +69,17 @@ class GHCRTests(unittest.TestCase):
         self.assertIn('--kind', run.call_args.args[0])
         self.assertIn('predeploy', run.call_args.args[0])
 
+    def test_https_check_identifies_itself_to_cloudflare(self):
+        response = Mock(status=200)
+        response.read.return_value = b'{"ok":true}'
+        opened = MagicMock()
+        opened.__enter__.return_value = response
+        with patch.object(deploy.urllib.request, 'urlopen', return_value=opened) as urlopen:
+            deploy.verify_https('https://music-challenge.damove.app/api/health', expect_json=True)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header('User-agent'), 'MusicChallenge-Deployment-Healthcheck/1.0')
+        self.assertEqual(request.get_header('Cache-control'), 'no-cache')
+
     def run_deployment(self, directory, backup_error=None):
         events = []
         config = {'state_directory': directory, 'repository': 'andy04912/MarkShare',

@@ -248,7 +248,10 @@ def verify_https(url, expect_json=False):
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         try:
-            request = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
+            request = urllib.request.Request(url, headers={
+                'Cache-Control': 'no-cache',
+                'User-Agent': 'MusicChallenge-Deployment-Healthcheck/1.0',
+            })
             with urllib.request.urlopen(request, timeout=10) as response:
                 if response.status == 200 and (not expect_json or json.load(response).get('ok') is True):
                     return

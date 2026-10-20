@@ -35,6 +35,10 @@ Coolify 仍負責網域、代理、環境變數、健康檢查與現有持久化
 5. 檢查公開 `/api/health`，部署前端，再檢查網站與 `/api/health` HTTPS。
 6. 儲存含 commit、digest、備份與部署編號的收據，撤銷臨時登入。
 
+公開 HTTPS 檢查使用 `MusicChallenge-Deployment-Healthcheck/1.0` User-Agent，
+避免 Cloudflare 對預設 Python 用戶端回覆 403；仍驗證 TLS 憑證、HTTP 200
+與 API 的 `ok: true`，不略過健康檢查，也不調整 Cloudflare 防護。
+
 VPS 不再安裝 npm 依賴或編譯 Vite。執行中單一後端、網路、資源限制、管理員
 設定、來源 HTTPS 憑證及 SQLite volume 均沿用。不得將正式資料放在原始碼目錄。
 
