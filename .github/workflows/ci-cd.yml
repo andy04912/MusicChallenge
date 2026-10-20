@@ -30,10 +30,10 @@ jobs:
         run: npm ci
       - name: 檢查 JavaScript 語法
         run: npm run check
-      - name: 執行後端與前端測試
-        run: npm test
       - name: 建置前端
         run: npm run build
+      - name: 執行後端與前端測試
+        run: npm test
 
   images:
     name: 建置與發布 GHCR 映像
