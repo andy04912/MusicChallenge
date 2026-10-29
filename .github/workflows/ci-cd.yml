@@ -112,7 +112,7 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/musicchallenge_deploy"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/musicchallenge_deploy" "$HOME/.ssh/known_hosts"
-      - name: 備份資料庫並由 Coolify 拉取映像、部署與檢查 HTTPS
+      - name: 備份資料庫、更新 Coolify Compose 服務並檢查 HTTPS
         env:
           VPS_HOST: ${{ vars.MUSICCHALLENGE_VPS_HOST }}
           VPS_USER: ${{ vars.MUSICCHALLENGE_VPS_USER }}
