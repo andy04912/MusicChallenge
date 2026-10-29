@@ -1,0 +1,29 @@
+services:
+  backend:
+    image: ghcr.io/andy04912/musicchallenge-backend@sha256:1325e7394f96b83deb26c4c3d6a8cca4a8d23c9a4a57fc935e7b230f570ba382
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+      APP_ORIGIN: https://music-challenge.damove.app
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "8080"
+      DATA_DIR: /data
+      SERVE_STATIC: "false"
+    volumes:
+      - songs-data:/data
+    init: true
+    restart: unless-stopped
+    mem_limit: 384m
+  frontend:
+    image: ghcr.io/andy04912/musicchallenge-frontend@sha256:606f939dc5c057a53865b7a534897649b9f987fbf1150c34801cb1dc7c7733b9
+    environment:
+      PORT: "8080"
+      API_UPSTREAM: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+    mem_limit: 128m
+volumes:
+  songs-data: {}
