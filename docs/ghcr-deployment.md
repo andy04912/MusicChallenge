@@ -29,7 +29,7 @@ GitHub 使用 `MUSICCHALLENGE_VPS_SSH_KEY` Secret，搭配 Variables
 
 工具原始碼為 `ops/compose_deploy.py`，由管理者檢查後以 root 安裝；設定檔為 root
 擁有的 `/etc/musicchallenge-deploy.json`，只含資源 UUID、容器名稱、必要 CI 檢查與
-健康檢查網址。GitHub 部署憑證不能切換專案或環境，工具只接受
+健康檢查網址；工具啟動時會先驗證設定檔，欄位缺漏或格式錯誤會在變更任何東西之前就拒絕。GitHub 部署憑證不能切換專案或環境，工具只接受
 `deploy <commit SHA> <backend digest> <frontend digest>`。
 
 部署 job 的短效 `GITHUB_TOKEN` 只有 `packages: read`，經 SSH stdin 傳到 VPS。

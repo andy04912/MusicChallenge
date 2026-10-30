@@ -236,19 +236,24 @@ def wait_for_containers(config, digests, timeout=420):
     raise DeployError('容器未在時限內就緒：' + ', '.join(sorted(pending)))
 
 
-def verify_https(url, expect_json=False, user_agent=None, timeout=120):
+def verify_https(url, expect_json=False, user_agent=None, timeout=120, status=200, interval=5):
+    """Poll `url` until it answers with `status` (and `{"ok": true}` when expect_json)."""
     deadline = time.monotonic() + timeout
     headers = {'Cache-Control': 'no-cache'}
     if user_agent:
         headers['User-Agent'] = user_agent
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=10) as response:
-                if response.status == 200 and (not expect_json or json.load(response).get('ok') is True):
+            try:
+                response = urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=10)
+            except urllib.error.HTTPError as error:
+                response = error  # a 4xx can be the expected answer, e.g. an API that wants a login
+            with response:
+                if response.status == status and (not expect_json or json.load(response).get('ok') is True):
                     return
         except (OSError, ValueError):
             pass
-        time.sleep(5)
+        time.sleep(interval)
     raise DeployError('HTTPS 驗證失敗：' + url)
 
 
@@ -329,7 +334,8 @@ def deploy(config, project, sha, digests, credentials, dry_run=False):
                 client.apply(uuid, updated)
                 wait_for_containers(config, digests)
                 for check in config['health_checks']:
-                    verify_https(check['url'], check.get('json', False), check.get('user_agent'))
+                    verify_https(check['url'], check.get('json', False), check.get('user_agent'),
+                                 status=check.get('status', 200))
             except BaseException as failure:
                 print(f'部署失敗，回復到前一版：{failure}', file=sys.stderr, flush=True)
                 client.apply(uuid, previous)
@@ -347,6 +353,49 @@ def deploy(config, project, sha, digests, credentials, dry_run=False):
         print(f'{project} 部署與 HTTPS 驗證完成：' + sha, flush=True)
 
 
+def validate_config(config):
+    """Reject a malformed /etc/<project>-deploy.json before anything is changed."""
+    def need(condition, message):
+        if not condition:
+            raise DeployError('部署設定檔不正確：' + message)
+
+    def text(value, pattern=r'.+'):
+        return isinstance(value, str) and re.fullmatch(pattern, value) is not None
+
+    need(isinstance(config, dict), '必須是 JSON 物件')
+    need(text(config.get('repository'), r'[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]+'), 'repository')
+    need(text(config.get('service_uuid'), r'[A-Za-z0-9]{10,40}'), 'service_uuid')
+    need(text(config.get('branch', 'main'), r'[A-Za-z0-9._/-]+'), 'branch')
+    need(text(config.get('coolify_token_file'), r'/.+'), 'coolify_token_file 須為絕對路徑')
+    need(text(config.get('state_directory'), r'/.+'), 'state_directory 須為絕對路徑')
+    checks = config.get('required_checks')
+    need(isinstance(checks, list) and checks and all(text(name) for name in checks), 'required_checks')
+    containers = config.get('containers')
+    need(isinstance(containers, dict) and set(containers) == set(KINDS)
+         and all(text(name, r'[A-Za-z0-9][A-Za-z0-9_.-]*') for name in containers.values()), 'containers')
+    support = config.get('support_containers', [])
+    need(isinstance(support, list) and all(text(name, r'[A-Za-z0-9][A-Za-z0-9_.-]*') for name in support),
+         'support_containers')
+    database = config.get('database')
+    need(isinstance(database, dict), 'database')
+    if database.get('kind') == 'sqlite':
+        need(text(database.get('volume')) and text(database.get('filename'), r'[A-Za-z0-9._-]+'),
+             'database.volume 與 database.filename')
+    elif database.get('kind') == 'postgres':
+        need(all(text(database.get(key)) for key in ('container', 'user', 'name')),
+             'database.container、user、name')
+    else:
+        need(False, 'database.kind 只能是 sqlite 或 postgres')
+    health = config.get('health_checks')
+    need(isinstance(health, list) and health, 'health_checks 不可為空')
+    for check in health:
+        need(isinstance(check, dict) and text(check.get('url'), r'https://[^\s]+'), 'health_checks 的 url 須為 https')
+        need(isinstance(check.get('status', 200), int) and 100 <= check.get('status', 200) <= 599, 'health_checks 的 status')
+        need(isinstance(check.get('json', False), bool), 'health_checks 的 json')
+        need(check.get('user_agent') is None or text(check['user_agent']), 'health_checks 的 user_agent')
+    return config
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', choices=('markshare', 'musicchallenge'), default='markshare')
@@ -357,7 +406,7 @@ def main():
     try:
         sha, digests = parse_command(os.environ.get('SSH_ORIGINAL_COMMAND', ''))
         credentials = read_credentials(sys.stdin)
-        config = json.loads(pathlib.Path(f'/etc/{args.project}-deploy.json').read_text())
+        config = validate_config(json.loads(pathlib.Path(f'/etc/{args.project}-deploy.json').read_text()))
         deploy(config, args.project, sha, digests, credentials, args.dry_run)
     except DeployError as error:
         print(f'部署失敗：{error}', file=sys.stderr)
